@@ -1,0 +1,82 @@
+openapi: 3.1.0
+info:
+  title: MyFinanceView API
+  version: 0.1.0-draft
+  description: |
+    REST API for MyFinanceView — personal finance backend.
+
+    **Status: placeholder.** This spec is the source of truth for the API contract.
+    Endpoints are added here BEFORE implementation (spec-driven development —
+    see [docs/base-standards.md §3](base-standards.md)).
+
+    All endpoints require `Authorization: Bearer {Supabase JWT}` unless noted.
+    Errors follow RFC 7807 (`application/problem+json`).
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://api.myfinanceview.dev   # pending registration
+    description: Production (planned)
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ProblemDetail:
+      type: object
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+
+paths:
+  # ============================================================
+  # PLACEHOLDER — endpoints to be added per /opsx:propose change
+  # ============================================================
+  # Inventario funcional definido en SPEC.md §5:
+  #   GET    /api/v1/transactions
+  #   GET    /api/v1/transactions/{id}
+  #   PATCH  /api/v1/transactions/{id}/category
+  #   GET    /api/v1/transactions/pending-review
+  #   GET    /api/v1/accounts
+  #   GET    /api/v1/accounts/{id}/billing-summary
+  #   GET    /api/v1/categories
+  #   GET    /api/v1/merchants
+  #   PUT    /api/v1/merchants/{id}
+  #   DELETE /api/v1/merchants/{id}
+  #   POST   /api/v1/merchants/merge
+  #   POST   /api/v1/feedback/transaction   (X-Webhook-Secret)
+  #
+  # Épica 5 — Metas de Ahorro (plans/savings-goals-plan.md §4):
+  #   GET    /api/v1/savings-goals
+  #   POST   /api/v1/savings-goals
+  #   GET    /api/v1/savings-goals/{id}
+  #   PATCH  /api/v1/savings-goals/{id}
+  #   DELETE /api/v1/savings-goals/{id}
+  #   POST   /api/v1/savings-goals/{id}/contributions
+  #   DELETE /api/v1/savings-goals/{id}/contributions/{contribId}
+  #   POST   /api/v1/savings-goals/{id}/avatar
+  #
+  # Cada uno se materializa aquí cuando entre a /opsx:propose.
+  /actuator/health:
+    get:
+      summary: Health probe
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: UP }
