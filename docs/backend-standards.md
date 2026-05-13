@@ -54,7 +54,17 @@ com.myfinanceview/
 - jOOQ implementations live under `db/jooq/`. The generated code (from codegen) lives in `generated/` and is gitignored when possible (regenerated from schema).
 - Cross-domain calls go service → service. Never controller → another service of a different domain.
 
-## 3. jOOQ Conventions
+## 3. Schema Migrations (Flyway)
+
+- **Tool:** Flyway 10 (managed by Spring Boot 3.4; `flyway-core` + `flyway-database-postgresql`).
+- **Location:** `src/main/resources/db/migration/V{n}__{snake_case_description}.sql`. Files on the classpath ship inside the application jar and are found by both Spring Boot auto-config and `./mvnw test`.
+- **Local-only stubs:** `database/local/V000__local_supabase_stubs.sql` is NOT on the Flyway classpath. It is applied by the Docker init orchestrator and Testcontainers `@BeforeAll` hooks only — it must never reach Supabase remote.
+- **Immutability rule:** Once a versioned migration is applied to **any** environment, its content is frozen. Never edit an applied migration file — Flyway's checksum validation will reject it and fail the application on startup. Ship corrections as a new `V<n+1>`.
+- **Clean disabled:** `flyway.clean-disabled=true` in `application.yml` is non-negotiable. If you need a fresh local DB, use `docker compose down -v && up -d`.
+- **Supabase ops:** Use the Maven profile `db-migrate` for `flyway:info`, `flyway:baseline`, `flyway:repair` against a specific JDBC URL. Never point `flyway:migrate` at Supabase without a verified backup. See [development-guide.md §Supabase remote operations](development-guide.md).
+- **History table:** `myfinance.flyway_schema_history` — inside the project schema, not `public`.
+
+## 4. jOOQ Conventions
 
 - **Codegen** from the live `myfinance` schema in Supabase (read-only role). Output to `generated/` or `target/generated-sources/`.
 - Regenerate after every schema migration. Commit only **if** the generated code is committed (decide once and stick to it).
@@ -62,14 +72,14 @@ com.myfinanceview/
 - For complex aggregations (corte de facturación, breakdown por categoría), prefer jOOQ over `@Query` JPQL-style strings; jOOQ shines exactly here.
 - Pagination: jOOQ `limit(size).offset(page * size)` with a stable ORDER BY. Default `size = 50`, max `100`.
 
-## 4. Spring Security
+## 5. Spring Security
 
 - One filter chain (`SecurityFilterChain`) validating Supabase JWT (`Authorization: Bearer ...`) against the public JWKS endpoint.
 - Permitted without auth: `/actuator/health`, `/actuator/info`, `/v3/api-docs/**` (Swagger).
 - Internal webhooks (e.g. `POST /api/v1/feedback/transaction` from n8n) protected by `X-Webhook-Secret` header (constant-time comparison).
 - The validated JWT's `sub` claim is the canonical `user_id`. Available via `@AuthenticationPrincipal` or `SecurityContextHolder`.
 
-## 5. Error Handling
+## 6. Error Handling
 
 - `@ControllerAdvice` class converts known exceptions to `ProblemDetail` (RFC 7807).
 - Mapping table:
@@ -82,28 +92,28 @@ com.myfinanceview/
   | (anything else) | 500 | `/errors/internal` (no detail leak) |
 - Validation errors (`@Valid`) return 400 with field-level `errors` map inside `ProblemDetail.properties`.
 
-## 6. Logging
+## 7. Logging
 
 - SLF4J + Logback (Spring Boot default).
 - `INFO` for state changes; `DEBUG` for flow detail; `ERROR` only for unexpected exceptions.
 - **Never** log: JWTs, Supabase keys, passwords, full email bodies (the `raw_payload` JSONB), card numbers.
 - Structured logs preferred: include `user_id`, `request_id`, `endpoint`. Use MDC.
 
-## 7. Configuration
+## 8. Configuration
 
 - `application.yml` for defaults; `application-{profile}.yml` for overrides (`local`, `test`, `prod`).
 - All secrets via env vars (`${SUPABASE_JWT_SECRET}`).
 - Never commit `application-prod.yml` with real values.
 - See [development-guide.md §Environment](development-guide.md) for the full env var list.
 
-## 8. Performance Defaults
+## 9. Performance Defaults
 
 - Connection pool: HikariCP, max 5 (Supabase free tier limit; document if raised).
 - Virtual Threads: `spring.threads.virtual.enabled=true`.
 - HTTP timeouts: 5s connect, 30s read for outbound calls (none for now, but document if added).
 - Pagination required on any list endpoint; default size 50, max 100.
 
-## 9. Testing Recipes
+## 10. Testing Recipes
 
 ### Contract test (REST-assured)
 ```java
@@ -139,7 +149,7 @@ void shouldComputeMonthlySuggestedWithHalfEven() {
 }
 ```
 
-## 10. Common Anti-Patterns to Reject
+## 11. Common Anti-Patterns to Reject
 
 - `Optional<X>` as a method parameter (use overloads or default values).
 - `@Autowired` field injection (use constructor injection — Records-ish style).

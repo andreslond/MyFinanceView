@@ -119,6 +119,18 @@ Empty. RLS: read = all authenticated; write = service role.
 
 ## 3. Pending Migrations (TASK-DB-01..05)
 
+> **Flyway manages all migrations V004+.** Files live at `src/main/resources/db/migration/`
+> and ship inside the application jar. Spring Boot auto-applies them on startup against local
+> Docker and Testcontainers; Supabase remote is operated via `mvn -P db-migrate flyway:*`
+> (see [development-guide.md §Running migrations locally](development-guide.md)).
+>
+> **Applied migrations are immutable.** Never edit a versioned migration after it has been
+> applied to any environment. Corrections ship as a new `V<n+1>` file. Flyway's checksum
+> validation will reject altered files and fail the app on startup.
+>
+> Cross-reference: `openspec/specs/database-migrations/spec.md` (available once the
+> `flyway-migrations` change is archived via `/opsx:archive`).
+>
 > Order matters. FK dependencies force this sequence.
 
 ### V004 — TASK-DB-01: categories.display_name (ES)

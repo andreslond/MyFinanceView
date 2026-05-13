@@ -546,7 +546,7 @@ En este orden:
 1. **Ejecutar migraciones DB-01 a DB-05** — el schema debe estar completo antes de que jOOQ genere las clases
 2. **Traer y refinar la spec antigua** — alinearla con la Sección 5 de este documento
 3. ~~**TASK-BE-01**~~ ✓ — setup del proyecto Spring Boot con Java 25, jOOQ, Maven (done 2026-05-13, archivo `openspec/changes/archive/2026-05-13-backend-scaffolding/`)
-4. **TASK-DB-06 / flyway-migrations** (NUEVO — surfaced 2026-05-13) — adoptar Flyway desde el principio para gestión de migraciones, eliminando el orquestador manual `database/init-db.sh` y separando definitivamente `database/local/` (stubs) de `database/migrations/` (baseline Flyway)
+4. ~~**TASK-DB-06 / flyway-migrations**~~ ✓ (done 2026-05-13) — Flyway adoptado: `flyway-core` + `flyway-database-postgresql` en pom.xml; V001–V003 movidos a `src/main/resources/db/migration/` (classpath); Spring Boot auto-aplica en startup; `FlywayMigrationIntegrationTest` + `PostgresTestcontainerTest` verdes. Pendiente: baseline Supabase remote (bloqueado por `supabase-backup-policy` change) — ver `openspec/changes/flyway-migrations/tasks.md §7`.
 5. **monorepo-restructure** — mover scaffold a `backend/` para dejar la raíz limpia para `frontend/` cuando arranque
 6. **TASK-BE-02** — configurar jOOQ codegen contra el schema `myfinance` ya migrado
 7. **TASK-BE-03** — Spring Security con JWT de Supabase

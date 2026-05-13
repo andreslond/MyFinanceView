@@ -10,6 +10,21 @@ spring:
       maximum-pool-size: 5
   jooq:
     sql-dialect: POSTGRES
+  # Flyway: applies classpath:db/migration/V*__*.sql against spring.datasource on startup.
+  # Baseline policy: NO auto-baseline anywhere. Local Docker + Testcontainers run V001..Vn
+  # from scratch against an empty myfinance schema. Supabase remote is baselined ONCE,
+  # manually, via `mvn -P db-migrate flyway:baseline -DbaselineVersion=3` — see
+  # docs/development-guide.md "Supabase remote operations".
+  # clean-disabled is non-negotiable in every profile; do NOT override.
+  flyway:
+    enabled: true
+    schemas: myfinance
+    default-schema: myfinance
+    create-schemas: true
+    baseline-on-migrate: false
+    clean-disabled: true
+    validate-on-migrate: true
+    out-of-order: false
 
 server:
   port: 8080

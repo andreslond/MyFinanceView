@@ -1,8 +1,8 @@
 # Test profile is intentionally near-empty.
 # Testcontainers-based tests register the live container's JDBC URL/user/password via
 # @DynamicPropertySource so this profile remains portable across CI runners.
-# DataSource and jOOQ auto-configuration are excluded by default; integration tests
-# that need them must re-enable explicitly or rely on @DynamicPropertySource setting a URL.
+# DataSource, jOOQ, and Flyway auto-configuration are excluded by default; integration tests
+# that need them must run without this profile and rely on @DynamicPropertySource setting a URL.
 # See openspec/changes/backend-scaffolding/design.md D7.
 spring:
   main:
@@ -11,3 +11,6 @@ spring:
     exclude:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
       - org.springframework.boot.autoconfigure.jooq.JooqAutoConfiguration
+      # Flyway requires a DataSource; exclude it here since this profile excludes DataSource.
+      # FlywayMigrationIntegrationTest runs without this profile and uses @DynamicPropertySource.
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration

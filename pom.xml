@@ -56,6 +56,38 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- JDBC connection pool + DataSource autoconfiguration (HikariCP).
+             Without this, Spring Boot does not create a DataSource bean even when jOOQ is present.
+             jooq:jooq is pulled directly (not via spring-boot-starter-data-jooq) so we must be
+             explicit. spring-boot-starter-jdbc also provides spring-jdbc which jOOQ's Spring
+             integration depends on. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+
+        <!-- Flyway: schema migrations applied by Spring Boot on startup.
+             Version is managed by spring-boot-dependencies (Flyway 10.x for Spring Boot 3.4).
+             flyway-database-postgresql is required since Flyway 10 split DBMS support out of core. -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- spring-boot-testcontainers: provides @ServiceConnection and the Testcontainers
+             autoconfiguration support. Used by FlywayMigrationIntegrationTest; kept as a test
+             dependency only since it is never needed in the running application. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -117,6 +149,22 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <!-- Flyway Maven plugin: declared but NOT bound to a default phase.
+                 The Spring Boot app auto-runs Flyway at startup — that is the normal path.
+                 This plugin is the escape hatch for ops work (Supabase baseline, ad-hoc info,
+                 post-incident repair) that does NOT involve booting the app.
+                 Activate explicitly with: mvn -P db-migrate flyway:<goal> -Dflyway.url=... -->
+            <plugin>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>flyway</id>
+                        <phase>none</phase>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
@@ -138,6 +186,41 @@
                                 </goals>
                             </execution>
                         </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- db-migrate profile: activates flyway-maven-plugin for ops work.
+             All Flyway connection params are read from -D system properties so the
+             same pom serves local, Testcontainers, and Supabase remote without
+             baking credentials into the build.
+             Example: mvn -P db-migrate flyway:info -Dflyway.url=jdbc:postgresql://localhost:5433/myfinance_local -Dflyway.user=myfinance -Dflyway.password=localpassword -Dflyway.schemas=myfinance -->
+        <profile>
+            <id>db-migrate</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.flywaydb</groupId>
+                        <artifactId>flyway-maven-plugin</artifactId>
+                        <configuration>
+                            <url>${flyway.url}</url>
+                            <user>${flyway.user}</user>
+                            <password>${flyway.password}</password>
+                            <schemas>
+                                <schema>${flyway.schemas}</schema>
+                            </schemas>
+                            <defaultSchema>${flyway.defaultSchema}</defaultSchema>
+                            <baselineVersion>${flyway.baselineVersion}</baselineVersion>
+                            <baselineDescription>${flyway.baselineDescription}</baselineDescription>
+                            <cleanDisabled>true</cleanDisabled>
+                        </configuration>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.flywaydb</groupId>
+                                <artifactId>flyway-database-postgresql</artifactId>
+                            </dependency>
+                        </dependencies>
                     </plugin>
                 </plugins>
             </build>

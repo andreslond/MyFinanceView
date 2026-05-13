@@ -42,33 +42,99 @@ LOCAL_DB_PORT=5433
 
 ## 3. Local Postgres (Docker Compose)
 
-`docker/docker-compose.yml`:
-```yaml
-services:
-  postgres:
-    image: postgres:17
-    environment:
-      POSTGRES_DB: myfinance_local
-      POSTGRES_USER: myfinance
-      POSTGRES_PASSWORD: localpassword
-    ports:
-      - "5433:5432"
-    volumes:
-      - ./db/migrations:/docker-entrypoint-initdb.d
-```
+`docker/docker-compose.yml` mounts only the V000 local stubs and the init script. Flyway
+(via Spring Boot startup) applies V001..Vn — not the Docker container.
 
 Start: `docker compose -f docker/docker-compose.yml up -d`.
 Stop: `docker compose -f docker/docker-compose.yml down`.
 
 ## 4. Database Migrations
 
-Migrations live in `database/migrations/` with naming `V{n}__{description}.sql` (Flyway style, even though Flyway is not yet wired). Current numbering:
+Production migrations (`V001..Vn`) live at `src/main/resources/db/migration/` and ship
+inside the application jar. Flyway applies them automatically on Spring Boot startup.
+The local-only compatibility stubs (`V000__local_supabase_stubs.sql`) remain in
+`database/local/` — they are applied by the Docker init orchestrator and Testcontainers
+`@BeforeAll` hooks, **never** by Flyway.
 
-- V001..V003 — baseline schema (applied to Supabase remote)
+Current numbering:
+
+- V001..V003 — baseline schema (applied to Supabase remote manually; baselined via Flyway once `supabase-backup-policy` change is archived)
 - V004..V008 — pending TASK-DB-01..05 (see [data-model.md §3](data-model.md))
 - V009 — pending TASK-SG-DB-01 (savings goals)
 
-**Apply order is strict** (FK dependencies). Apply locally first, smoke-test, then to remote Supabase via SQL Editor or `supabase db push` once we wire Flyway/Liquibase.
+**Apply order is strict** (FK dependencies).
+
+**Applied migrations are immutable.** Never edit a versioned file after it has been applied to any environment. Corrections ship as a new `V<n+1>`.
+
+### Running migrations locally
+
+Spring Boot applies all classpath migrations at startup automatically:
+
+```bash
+# Start local Postgres (V000 applied by Docker init orchestrator on first run)
+docker compose -f docker/docker-compose.yml up -d
+
+# Spring Boot auto-applies Flyway on startup
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+# Expected log: "Successfully applied N migrations to schema "myfinance""
+```
+
+After that, confirm Flyway history:
+```bash
+psql -h localhost -p 5433 -U myfinance -d myfinance_local \
+  -c "SELECT version, description, success FROM myfinance.flyway_schema_history ORDER BY installed_rank"
+```
+
+To reset local DB (e.g. after switching branches that change migrations):
+```bash
+docker compose -f docker/docker-compose.yml down -v
+docker compose -f docker/docker-compose.yml up -d
+# Then run the app to re-apply Flyway
+```
+
+### Supabase remote operations
+
+> **STOP — Read before executing any command below.**
+>
+> Supabase remote holds 3 months of real, irreplaceable production transactions (single
+> environment, no staging). Before running **any** `flyway:migrate` or `flyway:baseline`
+> against Supabase:
+> 1. Run a verified `pg_dump` of the `myfinance` schema.
+> 2. Restore the dump into a local test Postgres and confirm row counts match.
+> 3. Save the dump outside the repository (e.g. encrypted cloud storage).
+>
+> See memory `supabase-production-data` (2026-05-13) and the pending
+> `supabase-backup-policy` OpenSpec change — **do not proceed until that change is archived**.
+
+One-time baseline (after backup gate is satisfied, V001–V003 already applied manually):
+
+```bash
+# 1. Confirm no flyway_schema_history table exists yet
+./mvnw -P db-migrate flyway:info \
+  -Dflyway.url=jdbc:postgresql://db.akkoqdjmmozyqdfjkabg.supabase.co:5432/postgres \
+  -Dflyway.user=... -Dflyway.password=... \
+  -Dflyway.schemas=myfinance -Dflyway.defaultSchema=myfinance
+
+# 2. Record the baseline (inserts one row — does NOT touch existing data)
+./mvnw -P db-migrate flyway:baseline \
+  -Dflyway.url=jdbc:postgresql://db.akkoqdjmmozyqdfjkabg.supabase.co:5432/postgres \
+  -Dflyway.user=... -Dflyway.password=... \
+  -Dflyway.schemas=myfinance -Dflyway.defaultSchema=myfinance \
+  -Dflyway.baselineVersion=3 \
+  -Dflyway.baselineDescription="Existing schema V001-V003 applied manually"
+
+# 3. Verify: must show one row — version=3, type=BASELINE, success=true
+./mvnw -P db-migrate flyway:info \
+  -Dflyway.url=... -Dflyway.user=... -Dflyway.password=... \
+  -Dflyway.schemas=myfinance -Dflyway.defaultSchema=myfinance
+```
+
+Recovery if history table is corrupted:
+```bash
+./mvnw -P db-migrate flyway:repair \
+  -Dflyway.url=... -Dflyway.user=... -Dflyway.password=... \
+  -Dflyway.schemas=myfinance -Dflyway.defaultSchema=myfinance
+```
 
 ## 5. jOOQ Code Generation
 
@@ -185,8 +251,10 @@ mvn jooq-codegen:generate
 ```bash
 docker compose -f docker/docker-compose.yml down -v
 docker compose -f docker/docker-compose.yml up -d
+# Then boot the app to re-apply Flyway (see §4 Running migrations locally)
 ```
-The `-v` flag drops volumes; migrations in `database/migrations/` re-run on start.
+The `-v` flag drops volumes. The init orchestrator re-applies V000 on container start;
+Spring Boot startup then re-applies V001..Vn via Flyway.
 
 ## 11. Troubleshooting
 
