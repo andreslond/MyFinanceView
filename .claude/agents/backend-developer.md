@@ -2,6 +2,7 @@
 name: backend-developer
 description: Use when implementing Java backend code for MyFinanceView — endpoints, services, repositories, migrations. Knows the project's modular-monolith-by-domain structure, jOOQ over JPA, BigDecimal HALF_EVEN, ProblemDetail errors, Testcontainers integration. Prefer over generic Java guidance because this agent has the project conventions baked in. Spawn for: implementing a TASK-BE-*, refactoring within a domain module, writing tests for a specific feature, generating boilerplate aligned with the package structure.
 tools: Read, Glob, Grep, Edit, Write, Bash
+model: sonnet
 ---
 
 # Backend Developer — MyFinanceView
