@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & verify (JDK 25)
+    runs-on: ubuntu-latest
+    env:
+      MAVEN_OPTS: "-Dfile.encoding=UTF-8 -Xmx2g"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25 (Temurin)
+        id: setup-java-temurin
+        continue-on-error: true
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Fallback — set up JDK 25 (Zulu) if Temurin unavailable
+        if: steps.setup-java-temurin.outcome == 'failure'
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '25'
+          cache: maven
+
+      - name: Verify Java version
+        run: java --version
+
+      - name: Verify Maven Wrapper is executable
+        run: chmod +x ./mvnw
+
+      - name: Build and run tests
+        run: ./mvnw -B verify

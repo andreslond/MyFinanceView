@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: myfinanceview
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    hikari:
+      # Sized for Supabase free tier (max 60 across all clients). See docs/backend-standards.md §8.
+      maximum-pool-size: 5
+  jooq:
+    sql-dialect: POSTGRES
+
+server:
+  port: 8080
+  forward-headers-strategy: framework
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

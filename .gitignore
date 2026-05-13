@@ -1,0 +1,31 @@
+# Build output
+target/
+target/generated-sources/jooq/
+*.class
+
+# Maven
+!.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.project
+.classpath
+.settings/
+
+# Spring Boot
+HELP.md
+*.log
+
+# Local env (any .env.* except the committed example)
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db

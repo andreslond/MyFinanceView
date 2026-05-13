@@ -1,0 +1,38 @@
+# Local Postgres for MyFinanceView development.
+#
+# Init pipeline (one-time, runs only when the data dir is empty — i.e. on
+# `docker compose up -d` against a fresh volume):
+#   1. ../database/local/V000__local_supabase_stubs.sql    ← local-only parity stubs
+#   2. ../database/migrations/V001..Vn                      ← real schema (also applied to Supabase)
+#
+# To re-apply migrations on this volume, `docker compose down -v && up -d`.
+# Init scripts do NOT re-run on subsequent restarts of the same volume.
+#
+# See openspec/changes/backend-scaffolding/design.md D6 (init-script orchestration)
+# and TASK-DB-06 (Notion) for the Flyway adoption that will replace this.
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: myfinance-postgres-local
+    environment:
+      POSTGRES_DB: myfinance_local
+      POSTGRES_USER: myfinance
+      POSTGRES_PASSWORD: localpassword
+    ports:
+      - "5433:5432"
+    volumes:
+      # Init orchestrator runs at /docker-entrypoint-initdb.d/00_init.sh
+      - ../database/init-db.sh:/docker-entrypoint-initdb.d/00_init.sh:ro
+      # Source folders read by the orchestrator (NOT auto-executed by postgres entrypoint)
+      - ../database/local:/var/lib/myfinance/local:ro
+      - ../database/migrations:/var/lib/myfinance/migrations:ro
+      - myfinance_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myfinance -d myfinance_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  myfinance_pgdata:
