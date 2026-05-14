@@ -29,6 +29,8 @@
 >
 > **Monolito modular por dominio.** Un solo deployable de Spring Boot. Paquetes por bounded context (`domain/transaction`, `domain/category`, `domain/merchant`, `domain/billing`, `domain/savings`, …), no por capas técnicas. Sin hexagonal puro, sin CQRS, sin microservicios, sin JPA, sin reactivo. Ver [`docs/base-standards.md §2`](docs/base-standards.md) y [`docs/backend-standards.md §2`](docs/backend-standards.md).
 >
+> **Excepción explícita — servicios de infraestructura (enmienda 2026-05-13):** la prohibición de microservicios aplica al *dominio de aplicación* (transactions, savings, billing, …). Procesos auxiliares de infraestructura — n8n (ingesta de correos), el sidecar `myfinance-backup-runner` (encripta y sube snapshots de Postgres), Traefik, Uptime Kuma — pueden vivir como servicios separados en su propia subcarpeta (`scripts/<dominio-infra>/`) porque no implementan reglas de negocio y su sustitución no afecta al Spring Boot app. Cada nuevo servicio de infraestructura requiere justificación explícita en el `design.md` del cambio que lo introduce. Esta enmienda formaliza la carve-out usada por [`openspec/changes/supabase-backup-policy`](openspec/changes/supabase-backup-policy/) (resuelve adversarial-review finding #2 del 2026-05-13, que correctamente señaló que el sidecar Node+Express necesita amendment, no auto-exención dentro del propio `design.md`).
+>
 > ### 🔁 Flujo de trabajo (por cambio)
 >
 > ```

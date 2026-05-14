@@ -23,7 +23,7 @@ If you find guidance somewhere not listed above (e.g. CLAUDE.md hints, AGENTS.md
 
 **Monolito modular por dominio.** Single Spring Boot deployable. Packages organized by bounded context (`domain/transaction`, `domain/savings`, …), not by technical layer. Each domain module owns its rules, repositories, and ports.
 
-**Forbidden** (introducing any of these requires explicit SPEC.md amendment):
+**Forbidden** (introducing any of these in the **application domain** — `domain/transaction`, `domain/savings`, `domain/billing`, etc. — requires explicit SPEC.md amendment):
 - Clean Architecture *by layers* (no `domain/model`, `application/usecase`, `infrastructure/` split)
 - Hexagonal ports & adapters maximalism
 - CQRS, event sourcing, read/write split
@@ -32,6 +32,8 @@ If you find guidance somewhere not listed above (e.g. CLAUDE.md hints, AGENTS.md
 - Reactive (WebFlux, Project Reactor) — we use Virtual Threads via Loom
 
 **Inter-module communication:** plain Spring `@Service` calls inside the same context. No events, no message queues, no internal HTTP.
+
+**Infrastructure carve-out (amendment 2026-05-13 — see SPEC.md §🏛️ "Excepción explícita"):** the microservices prohibition applies to the application domain only. *Infrastructure* services — n8n (Gmail ingest), `myfinance-backup-runner` (sidecar for encrypted snapshots), Traefik, Uptime Kuma — may live as separate processes under `scripts/<infra-domain>/` because they do not implement business rules and replacing them does not touch the Spring Boot deployable. Each new infra service requires an explicit `design.md` justification in the change that introduces it, plus a SPEC.md reference. The carve-out is narrow: it covers infrastructure that *supports* the application, not pieces of the application factored into separate processes. Originated from adversarial-review of [`supabase-backup-policy`](../openspec/changes/supabase-backup-policy/) (finding #2).
 
 ## 3. Development Methodology
 
