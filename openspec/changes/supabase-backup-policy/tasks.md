@@ -1,0 +1,279 @@
+## 1. Operator prerequisites (one-time, manual, before any code lands)
+
+- [ ] 1.1 On the Windows PC, install `age` from https://github.com/FiloSottile/age/releases (or `winget install age`) and confirm `age --version` works
+- [ ] 1.2 **Generate the PRIMARY age key pair (B1 fix):** `age-keygen -o $env:USERPROFILE\.config\myfinance-backup\age-identity-primary.txt`. Copy the matching recipient (public key — the line starting with `age1`) into the clipboard for step 2.2a.
+- [ ] 1.2b **Generate the RECOVERY age key pair (B1 fix) in a dedicated directory so the disk blocks can be wiped after printing (#1 forensic-recovery fix):** create an empty dedicated folder `$env:TEMP\age-recovery-genroom\`, then `age-keygen -o $env:TEMP\age-recovery-genroom\age-identity-recovery-DELETE-ME.txt`. The folder is dedicated so the `cipher /W` pass in step 1.3b operates on a directory with no other files. Copy the matching recipient (public key) into the clipboard for step 2.2b. Note: the file name encodes "delete me" because the file AND the disk slack covering it WILL be wiped in step 1.3b.
+   - **Stronger custody alternative (recommended for operators concerned about local forensic adversaries — finding #1):** instead of generating on Windows, boot a Tails / Ubuntu live USB on the same workstation, run `age-keygen` there, print the recovery identity from the live OS, then shut down. Tails/live-USB sessions write nothing to the NTFS volume, so there is no journal/VSS surface to wipe. The Windows path below is acceptable for the operator's threat model (no local adversary with forensic disk access) when followed by the `cipher /W` step; document the choice in `scripts/backup/README.md §2.5.5` so a future operator picking up the rotation knows which path was taken.
+- [ ] 1.3 Restrict NTFS ACLs on `age-identity-primary.txt` to the current user only; print one paper copy of the **primary** identity (printer-safety guidance — finding #18 fix: prefer a USB-connected printer and avoid networked printers, which may cache the plaintext in internal storage; if only a network printer is available, after printing power-cycle it AND clear its job history). Use Notepad → File → Print, or copy to a printable RTF. Seal in envelope `#1` and file at **physical location A** (operator's documented choice — home safe / firebox / locked drawer).
+- [ ] 1.3b Print one paper copy of the **recovery** identity (same procedure as 1.3 — USB-connected printer preferred, see #18 guidance). Seal in envelope `#2` and file at **physical location B**, geographically separated from location A (relative's house / work locker / safe deposit box — operator's documented choice). **Then forensically wipe the disk copy AND its NTFS slack (#1 finding fix — was `Remove-Item -Force` which is recoverable from the NTFS journal and Volume Shadow Copies for hours-to-days):**
+   ```powershell
+   # Step 1: delete the file
+   Remove-Item -Force $env:TEMP\age-recovery-genroom\age-identity-recovery-DELETE-ME.txt
+   if (Test-Path $env:TEMP\age-recovery-genroom\age-identity-recovery-DELETE-ME.txt) { throw "recovery identity still on disk — abort" }
+   # Step 2: wipe the free space (now containing the just-deleted file's clusters) on the volume holding $env:TEMP.
+   # `cipher /W` overwrites unallocated clusters with 0x00, then 0xFF, then random — defeats journal/VSS recovery on HDD.
+   # Run against the dedicated folder created in 1.2b so the wipe scope is bounded and fast (~minutes).
+   cipher /W:$env:TEMP\age-recovery-genroom
+   # Step 3: also clear Volume Shadow Copies on the temp volume (if VSS is enabled — Windows 10 default).
+   # This requires an elevated PowerShell — open as Administrator just for this command, then close.
+   # vssadmin delete shadows /for=<drive>: /quiet
+   # (Example for C: — substitute the actual temp drive.)
+   vssadmin delete shadows /for=$env:TEMP.Substring(0,2) /quiet
+   # Step 4: remove the now-wiped genroom folder.
+   Remove-Item -Force -Recurse $env:TEMP\age-recovery-genroom
+   ```
+   From this moment, the recovery identity exists ONLY on paper at location B and no journal/VSS forensic surface remains. **Operator acknowledgement:** `cipher /W` is best-effort on SSDs (TRIM/wear-leveling may already have rewritten the underlying flash blocks before the wipe runs); for the operator's threat model (no local forensic adversary expected) this is an acceptable v1. The hardened path is the Tails/live-USB alternative documented in 1.2b — operator may choose either.
+- [ ] 1.4 In the Cloudflare R2 dashboard, create an API token scoped to `Object Read & Write` on the existing `my-finance-view-backups` bucket; capture the Access Key ID, Secret Access Key, and the 32-char account ID
+- [ ] 1.5 In Cloudflare R2, configure **FIVE** Object Lifecycle Policies on `my-finance-view-backups`: `daily/` 30 days, `weekly/` 90 days, `monthly/` 365 days, **`pre-op/` 90 days (B5 fix)**, **`quarantine/` 365 days (M15 fix)**; screenshot the dashboard for the operator runbook
+- [ ] 1.6 Generate a Gmail App Password at https://myaccount.google.com/apppasswords with label `MyFinanceView backups`; capture the 16-char value
+- [ ] 1.7 Invent an unguessable ntfy.sh topic slug (32+ chars, mix of letters and digits) and subscribe to it from the operator's phone via the ntfy app
+- [ ] 1.8 Invent two more 32-char secrets: `MYFINANCE_BACKUP_RUNNER_SECRET` (n8n ↔ sidecar) and `MYFINANCE_PREOP_WEBHOOK_SECRET` (external caller ↔ n8n webhook)
+- [ ] 1.9 In Supabase Dashboard → MyFinanceView project (`akkoqdjmmozyqdfjkabg`) → Settings → Database, capture or reset the `postgres` role password; confirm the Session Pooler endpoint is `aws-0-us-west-2.pooler.supabase.com:5432`
+- [ ] 1.10 In the existing Uptime Kuma UI on the VPS, create a Push Monitor named `MyFinance Daily Backup` with heartbeat = 24 h and grace period = 6 h; copy the resulting push URL (contains an unguessable token). **Wire AT LEAST ONE downstream notification channel to this monitor (finding #8 fix — symmetric with healthchecks.io 1.11):** open the Kuma monitor's *Notifications* tab and attach one of (Telegram bot, Discord webhook, Gmail SMTP, ntfy.sh, generic webhook) so that grace-period exhaustion produces an alert the operator actually sees. **Smoke-verify the channel BEFORE activation:** click Kuma's "Test" button on the chosen notification channel and confirm a test message arrived (Telegram message, Discord message, etc.). A Kuma monitor with no notification channel is silent on failure — it would log "Down" in the UI but never page the operator. This is the failure mode finding #8 calls out (in-cluster Kuma alert silently swallowed because no downstream wired). Document the wired channel(s) in `scripts/backup/README.md §2.5.5` so a future operator picking up the rotation knows which to rotate.
+- [ ] 1.11 **Sign up at healthchecks.io free tier (M1 fix)** and create a project `MyFinanceView Backups`; add one check named `myfinance-backup-daily` with schedule `@daily` + grace 6 h; capture the resulting ping URL (form `https://hc-ping.com/<uuid>`). Add at least one downstream integration (email is mandatory — operator's `aftorresl01@gmail.com`; optional Slack/Discord/SMS).
+- [ ] 1.12 **Capture the operator's current public IPs for the Traefik allowlist (M3 fix):** look up your home IP at `whatismyip.com`, capture as `/32` CIDR. If you regularly originate pre-op calls from a mobile hotspot or VPN, capture those egress ranges too. These will go into `traefik/dynamic/myfinance-preop.yml` in step 8.0.
+
+## 2. Repository scaffold
+
+- [ ] 2.1 Create `scripts/backup/`, `scripts/backup/runner/`, `scripts/backup/workers/`, `scripts/backup/n8n/`, and `scripts/backup/recipients/`
+- [ ] 2.2a Write `scripts/backup/recipients/primary.txt` containing exactly the primary age public key from task 1.2 (one line, starts with `age1`)
+- [ ] 2.2b Write `scripts/backup/recipients/recovery.txt` containing exactly the recovery age public key from task 1.2b (one line, starts with `age1`). **Sanity check:** `git diff` MUST show the two files contain different keys; an accidental copy-paste of the same key into both files would silently revert to single-recipient encryption and is the failure mode B1 is meant to prevent.
+- [ ] 2.3 Confirm root `.gitignore` already blocks `.env`, `.env.*` except `.env.example` (committed earlier); add explicit lines for `age-identity*`, `**/age-identity*`, `*.identity`, **`!scripts/backup/recipients/*.txt`** (whitelist the PUBLIC recipient files which DO need to be tracked), and a sanity rule rejecting any file whose contents start with `AGE-SECRET-KEY-`
+- [ ] 2.4 Confirm `.env.example` documents the full backup-pipeline variable contract: `BACKUP_DB_*`, `BACKUP_R2_*`, `MYFINANCE_BACKUP_AGE_*`, `MYFINANCE_BACKUP_NTFY_TOPIC`, `MYFINANCE_BACKUP_GMAIL_APP_PASSWORD`, `MYFINANCE_PREOP_WEBHOOK_SECRET`, `MYFINANCE_BACKUP_RUNNER_URL`, `MYFINANCE_BACKUP_RUNNER_SECRET`, `MYFINANCE_BACKUP_KUMA_PUSH_URL`, **`MYFINANCE_BACKUP_HEALTHCHECKS_URL`** (new — off-VPS dead-man-switch, M1 fix). Each entry MUST be only a placeholder; no real secret may be committed.
+- [ ] 2.5 Write `scripts/backup/README.md` with sections:
+   - [ ] 2.5.1 Overview — what this directory does, link to `openspec/specs/database-backups/spec.md`
+   - [ ] 2.5.2 Architecture — link to `openspec/changes/supabase-backup-policy/design.md` §10 (sidecar diagram)
+   - [ ] 2.5.3 Environment setup — explicit pointer: "the backup runner reads `scripts/backup/.env.local` (gitignored). The variable contract lives in the root `.env.example`. Copy that section into `scripts/backup/.env.local` on the VPS and fill the values. There is no duplicate `.env.example` here — DRY."
+   - [ ] 2.5.4 Operator runbook — install on VPS, smoke test, manual pre-op via webhook, manual recovery from R2 using either primary or recovery age identity
+   - [ ] 2.5.5 Key rotation — age recipients (rebuild image after replacing files under `recipients/`), age primary identity (re-encrypt drill), age recovery identity (drill: re-encrypt with new recovery, re-print paper, re-file at location B), R2 token, Gmail App Password, Kuma push URL, healthchecks.io URL, runner shared-secret, webhook shared-secret
+   - [ ] 2.5.6 Disaster scenarios:
+     - **All papers AND PC primary identity simultaneously lost** = UNRECOVERABLE (the only catastrophic key-loss path under the dual-paper design; document explicitly)
+     - **Primary paper destroyed + PC compromised** = recover with recovery paper from location B on a clean machine
+     - **Recovery paper destroyed** = recover with primary paper or PC; re-print recovery immediately
+     - **VPS gone, Cloudflare gone simultaneously** = restore from monthly external-disk archive (frequency limit: ≤1 month old)
+   - [ ] 2.5.7 **Annual disaster drill checklist (operator habit, recurring January):** decrypt one snapshot with primary paper identity, decrypt same snapshot with recovery paper identity, confirm both papers still readable, re-print if smudged or water-damaged
+- [ ] 2.6 Create `openspec/templates/supabase-write-checklist.md` with a reusable "task 0" template for future OpenSpec changes touching Supabase remote (reads R2 `status/last-success.json`, confirms < 24 h old, or invokes the pre-op webhook). This is the artefact behind the process-gate Requirement's "future changes append this as task 0" claim.
+
+## 3. Sidecar runner — Node + Express HTTP layer (`scripts/backup/runner/`)
+
+- [ ] 3.1 Write `package.json` pinning `express@^4`, `helmet@^7`, `pino@^9` and Node engines `>=22 <23`
+- [ ] 3.2 Run `npm install` once locally to produce `package-lock.json`; commit both
+- [ ] 3.3 Write `server.js` exposing `/healthz` (GET, no auth, returns version), `/status` (GET, no auth — see M14 below), and the three `/run/*` POST endpoints; bind only to `0.0.0.0:8080` inside the container. **`/status` MUST read from R2 (`r2:my-finance-view-backups/status/{last-success,last-preop,last-verify,last-drill}.json`), NOT from the runner's local `/var/lib/myfinance-backup/status/` cache** — R2 is the canonical source of truth so the watchdog sees the same state regardless of which runner replica answers (M14 fix). The `lastDrill` key surfaces `status/last-drill.json` for the disaster-drill watchdog (finding #5 fix); when the file is missing, the runner returns `lastDrill: null` rather than 404. Cache the R2 response for 60 s in-memory to avoid hammering R2 from a misconfigured polling client. If R2 is unreachable, `/status` returns 503 with `{"error":"r2_unreachable"}` rather than stale data — this propagates through to the n8n Watchdog as a workflow error and triggers the ErrorHandler.
+- [ ] 3.4 Write `auth.js` middleware that compares `X-Runner-Secret` header against `process.env.MYFINANCE_BACKUP_RUNNER_SECRET` using `crypto.timingSafeEqual`; reject mismatches with 401 and an empty body
+- [ ] 3.5 Write `mutex.js` exporting an `acquireRunLock()` / `releaseRunLock()` pair backed by an in-process boolean. **The mutex covers HTTP entrypoints only** (B5 fix): when `backup-preop.sh` invokes `verify-restore.sh` as a subprocess (not via HTTP), the Node mutex is irrelevant and the chained verify proceeds. A concurrent external `POST /run/*` while a run is active returns 409 with `{"error":"run_in_progress"}`. Document this asymmetry in the module's JSDoc.
+- [ ] 3.6 Write `workers.js` that spawns `/opt/myfinance-backup/workers/<name>.sh` via `child_process.spawn`, streams stdout/stderr into a log file under `/var/lib/myfinance-backup/logs/<run-id>.log`, and parses the worker's final JSON line as the HTTP response payload. **For verify chains (B7 fix):** the runner MUST (a) scrub the identity from the child env via `{ env: { ...process.env, MYFINANCE_BACKUP_AGE_IDENTITY: undefined } }`, (b) write the identity bytes onto the child's stdin pipe (`child.stdin.write(identity); child.stdin.end();`), and (c) document that the worker is expected to read stdin into a bash variable and persist it to a tmpfs file before calling `age -d -i`. The runner does NOT itself write the tmpfs file — that responsibility lives in the worker so the file lifetime is tied to the worker's EXIT trap, not to a separate Node-managed lifecycle that would race the worker on failure paths. The previous draft's `age -d -i /dev/stdin < snapshot.tar.age` worker invocation is REJECTED — it conflicts with the ciphertext stdin redirect and never works in practice.
+- [ ] 3.7 Wire pino structured logging with redaction of any header named `x-runner-secret` and any env var matching `*_SECRET`, `*_PASSWORD`, `*_KEY`
+- [ ] 3.8 Add a Jest test for the auth middleware (timing-safe rejection of wrong/missing secret) and one for the mutex (sequential vs concurrent calls)
+
+## 4. Bash workers (`scripts/backup/workers/`)
+
+- [ ] 4.1 Write `_common.sh` (sourced by every worker): `set -euo pipefail`, `IFS=$'\n\t'`, logging helpers (`log_info`, `log_error`), `emit_json_result` helper that prints the final JSON line consumed by `workers.js`
+- [ ] 4.2 Write `alert.sh` exporting `dispatch_alert <title> <body>`; fires ntfy POST and Gmail SMTP in parallel via `&` + `wait`; returns 0 if at least one channel succeeded
+- [ ] 4.3 Write `backup-daily.sh`:
+   - [ ] 4.3.0 **pg_isready precheck:** `pg_isready -h "$BACKUP_DB_HOST" -p "$BACKUP_DB_PORT" -t 5 || { log_error "Supabase pooler $BACKUP_DB_HOST:$BACKUP_DB_PORT unreachable. If pg_dump previously worked, the pooler hostname may have moved — check Supabase Dashboard → Connect → Session pooler and update .env.local."; exit 3; }`
+   - [ ] 4.3.1 `pg_dump -Fc -Z 9 -t auth.users` against `$BACKUP_DB_HOST` using the Session Pooler endpoint; write `auth-users.dump` to a `mktemp -d` working dir. NO `--data-only` — captures DDL AND rows; verify-restore.sh will discard the DDL and only load the data because the production DDL references Supabase-only tables (B2 fix).
+   - [ ] 4.3.2 `pg_dump -Fc -Z 9 -n myfinance` against the same endpoint; write `myfinance.dump` to the same working dir.
+   - [ ] 4.3.3 Write `README.txt` with decryption hints (mentions BOTH primary and recovery identity paths); `tar -cf snapshot.tar` the three files
+   - [ ] 4.3.4 **Encrypt against BOTH recipients in one pass (B1 fix):** `age -r "$(cat /opt/myfinance-backup/recipients/primary.txt)" -r "$(cat /opt/myfinance-backup/recipients/recovery.txt)" -o snapshot.tar.age snapshot.tar`. The output ciphertext carries an independent X25519 header per recipient; either identity alone is sufficient for decryption.
+   - [ ] 4.3.5 Compute LOCAL_SHA256 of `snapshot.tar.age`; rename to `YYYY-MM-DD.tar.age`
+   - [ ] 4.3.6 `rclone copy` to `r2:my-finance-view-backups/daily/`; `rclone check` for parity
+   - [ ] 4.3.6b **Post-upload SHA-256 re-verify (M12 fix):** re-download the just-uploaded object from R2 into a separate path under the working dir, compute its SHA-256, compare with LOCAL_SHA256. On mismatch: `rclone moveto r2:my-finance-view-backups/daily/<file> r2:my-finance-view-backups/quarantine/<timestamp>-daily-<file>` server-side, dispatch alert, exit non-zero. This catches truncated multipart uploads whose remote-side checksum matches the truncated bytes.
+   - [ ] 4.3.7 If Sunday, `rclone copyto` from `daily/` to `weekly/YYYY-Www.tar.age` (server-side)
+   - [ ] 4.3.8 If day-of-month=1, `rclone copyto` from `daily/` to `monthly/YYYY-MM.tar.age` (server-side)
+   - [ ] 4.3.9 **Chained restore-verify (reviewer Q2 fix):** invoke `verify-restore.sh --target daily/$(basename <just-uploaded>)` as an in-process subprocess; pass the runner's `$MYFINANCE_BACKUP_AGE_IDENTITY` along on the subprocess's stdin pipe (or rely on it being inherited if the daily script itself was started with the identity on its own stdin — Node's `workers.js` does this). On verify failure: `rclone moveto r2:my-finance-view-backups/daily/<file> r2:my-finance-view-backups/quarantine/<timestamp>-daily-<file>`, write the failure into `status/last-verify.json`, dispatch alert, exit non-zero. On verify success: upsert `status/last-verify.json` with green probes.
+   - [ ] 4.3.10 Upsert `status/last-success.json` to R2 with path, size, sha256, ISO-8601 UTC timestamp, durationMs (only reached on verify success). **Finding #10 fix — same-day quarantine-then-success visibility:** before writing, the worker MUST `rclone lsf r2:my-finance-view-backups/quarantine/ | grep "^$(date -u +%Y-%m-%d)-daily-"` to detect quarantined daily artefacts produced earlier the same UTC day. If any are found, populate `previous_failed_attempts: <count>` and `quarantined_artefacts: ["quarantine/<full-path>", …]` in the upserted JSON. The watchdog / operator reading the file later thereby learns the day had ≥1 failed attempt before the green success and can investigate. Without these fields, a quarantine→success day appears as a clean green run and the quarantined sibling is forgotten.
+   - [ ] 4.3.11 Append one line to `status/status.log` on R2
+   - [ ] 4.3.12 Kuma success ping (truly fire-and-forget): `curl -sS --max-time 10 "$MYFINANCE_BACKUP_KUMA_PUSH_URL?status=up&msg=ok&ping=$ELAPSED_MS" > /dev/null 2>&1 || log_info "kuma push failed (non-fatal)"`. NO `-f` flag.
+   - [ ] 4.3.13 **healthchecks.io success ping (M1 fix):** `curl -sS --max-time 10 "$MYFINANCE_BACKUP_HEALTHCHECKS_URL" > /dev/null 2>&1 || log_info "healthchecks.io ping failed (non-fatal)"`. Same fire-and-forget treatment as Kuma — backup already succeeded; a transient healthchecks.io outage doesn't unmake the success.
+   - [ ] 4.3.14 Delete the working dir; `emit_json_result` with the success payload
+   - [ ] 4.3.15 On any failure (any step above exiting non-zero through `set -euo pipefail`), capture last 20 log lines, call `dispatch_alert "MyFinance backup FAILED" "$LOG_TAIL"`, exit non-zero (which makes Node return 500). The Kuma and healthchecks.io success pings are NOT sent on the failure path, allowing both dead-man-switches to fire on schedule.
+- [ ] 4.4 Write `backup-preop.sh`:
+   - [ ] 4.4.1 **Validate `REASON` matches `^[A-Za-z0-9._+-]{3,60}$` (B4 fix);** on rejection emit JSON `{"error":"invalid_reason","regex":"^[A-Za-z0-9._+-]{3,60}$","got":"<the input>","example_accepted":"flyway-baseline","example_accepted_2":"v4.1-migration"}` and exit 2 (Node maps to HTTP 400 with this body)
+   - [ ] 4.4.2 Run the same pipeline as `backup-daily.sh` 4.3.0–4.3.6 but write to `pre-op/YYYY-MM-DDTHH-MM-SSZ-<reason>.tar.age`. Two-recipient encryption applies identically (4.3.4).
+   - [ ] 4.4.2b **Post-upload SHA-256 re-verify (M12 fix)** — same as 4.3.6b but for the `pre-op/` upload. On mismatch: move to `quarantine/<timestamp>-pre-op-<file>`, emit JSON `{"error":"upload_corrupted","local_sha256":"…","r2_sha256":"…","quarantined_to":"quarantine/…"}`, dispatch alert, exit non-zero (Node returns HTTP 500 with this body).
+   - [ ] 4.4.3 Invoke `verify-restore.sh --target pre-op/<just-uploaded>` as an in-process subprocess (NOT via HTTP — same-container call). Pass the age identity through subprocess stdin.
+   - [ ] 4.4.4 On verify failure: `rclone moveto r2:my-finance-view-backups/pre-op/<file> r2:my-finance-view-backups/quarantine/<timestamp>-pre-op-<file>` server-side; emit JSON `{"error":"verify_failed","probe":{…},"quarantined_to":"quarantine/…"}`; do NOT update `status/last-preop.json`; dispatch alert via `dispatch_alert`; exit non-zero (Node returns HTTP 500).
+   - [ ] 4.4.5 On verify success, upsert `status/last-preop.json` with sha256 + probes; emit JSON success `{"artefact":"pre-op/<file>","sha256":"<hash>","verifyResult":{"probes":[…]}}` (Node returns HTTP 200).
+- [ ] 4.5 Write `verify-restore.sh`:
+   - [ ] 4.5.1 Argument parsing: optional `--target <r2-path>`; default = newest object under `daily/` via `rclone lsf --files-only daily/ | sort -r | head -n 1`. `cd /var/lib/myfinance-verify` (compose-declared tmpfs, sibling of `/var/lib/myfinance-backup`).
+   - [ ] 4.5.2 `rclone copy r2:my-finance-view-backups/<target>` into `/var/lib/myfinance-verify/`.
+   - [ ] 4.5.3 **Read age identity from stdin into a bash variable, then write to tmpfs file (B7 fix):**
+     ```bash
+     # Read identity from stdin (Node pipes it in; see §3.6)
+     IFS= read -rd '' AGE_IDENTITY < /dev/stdin || true
+     # Defensive scrub in case env was ever set
+     unset MYFINANCE_BACKUP_AGE_IDENTITY 2>/dev/null || true
+     # Write to tmpfs with mode 0600; the leading umask guarantees the mode regardless of system default
+     ( umask 0177 && printf '%s\n' "$AGE_IDENTITY" > /var/lib/myfinance-verify/.identity )
+     # Defensive: scrub the variable too
+     AGE_IDENTITY=""
+     # Install trap NOW so even an Ctrl-C before next line wipes the file
+     trap 'shred -u /var/lib/myfinance-verify/.identity 2>/dev/null || rm -f /var/lib/myfinance-verify/.identity 2>/dev/null || true' EXIT INT TERM
+     # Decrypt — age reads identity from file path, ciphertext from positional arg
+     age -d -i /var/lib/myfinance-verify/.identity snapshot.tar.age > snapshot.tar
+     ```
+     The previous draft's `age -d -i /dev/stdin < snapshot.tar.age` is REJECTED — stdin would be consumed by the `< ciphertext` redirect.
+   - [ ] 4.5.4 `tar -xf snapshot.tar` into `/var/lib/myfinance-verify/`.
+   - [ ] 4.5.5 **UUID-derived container name (M16 fix):** `VERIFY_CONTAINER="myfinance-verify-$(uuidgen | tr -d '-' | head -c 16)"`. Augment the EXIT trap to also stop the container: `trap 'docker stop "$VERIFY_CONTAINER" >/dev/null 2>&1 || true; shred -u /var/lib/myfinance-verify/.identity 2>/dev/null || rm -f /var/lib/myfinance-verify/.identity 2>/dev/null || true' EXIT INT TERM`
+   - [ ] 4.5.6 Spawn the ephemeral postgres:
+      ```
+      docker run -d --rm \
+        --name "$VERIFY_CONTAINER" \
+        --network n8n_net \
+        -v /var/lib/myfinance-verify:/backup:ro \
+        -e POSTGRES_PASSWORD=verify \
+        -e POSTGRES_DB=postgres \
+        postgres:17
+      ```
+      **DNS wait loop (M17 fix):** `for i in $(seq 1 10); do getent hosts "$VERIFY_CONTAINER" && break; sleep 1; done; getent hosts "$VERIFY_CONTAINER" || { log_error "Docker DNS never registered $VERIFY_CONTAINER"; exit 4; }`. Then `until pg_isready -h "$VERIFY_CONTAINER" -p 5432 -U postgres -t 5; do sleep 1; done` with a 60-s overall wall-clock cap.
+   - [ ] 4.5.7 **Pre-create `auth` schema and stub before restore (B2 fix):** `PGPASSWORD=verify psql -h "$VERIFY_CONTAINER" -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE SCHEMA IF NOT EXISTS auth; CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY);"`. Then restore in order: (a) `pg_restore -h "$VERIFY_CONTAINER" -p 5432 -U postgres -d postgres --data-only --table=users -Fc /backup/auth-users.dump` (loads just the id column rows into the stub; `--data-only` discards the broken DDL); (b) `pg_restore -h "$VERIFY_CONTAINER" -p 5432 -U postgres -d postgres -Fc /backup/myfinance.dump` (full DDL + data; FKs to `auth.users(id)` resolve against the stub).
+   - [ ] 4.5.8 For each query in `verify-queries.sql`, run via `PGPASSWORD=verify psql -h "$VERIFY_CONTAINER" -U postgres -d postgres -t -A` and compare against the documented threshold; emit a probe result entry. **NO `latest_transaction_age_days` probe** (B3 fix).
+   - [ ] 4.5.9 Teardown — the EXIT trap stops the container (`--rm` removes it on stop) AND wipes the tmpfs identity file unconditionally.
+   - [ ] 4.5.10 Upsert `status/last-verify.json` to R2 with target path, probes, timestamp.
+   - [ ] 4.5.11 On any failure exit non-zero; the trap guarantees both container cleanup and identity wipe even on `set -euo pipefail` propagation.
+- [ ] 4.6 Make all worker scripts executable (`git update-index --chmod=+x scripts/backup/workers/*.sh`) and confirm `set -euo pipefail` is the first non-shebang line in each
+- [ ] 4.7 **Smoke-test the bash workers against Postgres-in-Docker (finding #12 fix — project rule `base-standards.md §5`: integration tests use real Postgres, no mocks):** write `scripts/backup/test-smoke.sh` that:
+   1. Boots a local Postgres 17 container via `docker run -d --name myfinance-smoke-pg --network n8n_net -e POSTGRES_PASSWORD=smoke -e POSTGRES_DB=postgres postgres:17`, waits `pg_isready`.
+   2. Seeds the schema: applies `scripts/backup/test-fixtures/seed.sql` (this fixture file MUST be committed and MUST contain `CREATE SCHEMA myfinance`, the minimal table set `transactions`, `accounts`, `categories` matching the production DDL, AND row counts that exceed the verify thresholds — 400 transactions, 3 accounts, 20 categories — plus a stub `auth.users(id uuid PRIMARY KEY)` with 1 row).
+   3. Runs `backup-daily.sh` against the seeded local Postgres by injecting `BACKUP_DB_HOST=myfinance-smoke-pg BACKUP_DB_PORT=5432 BACKUP_DB_PASSWORD=smoke BACKUP_DB_USER=postgres BACKUP_DB_NAME=postgres BACKUP_R2_*=<dummy-or-minio-localhost>` (smoke test against a local MinIO container OR a stubbed rclone target — operator chooses).
+   4. Asserts the produced artefact decrypts (against the test-fixtures recipient identity, which IS committed under `scripts/backup/test-fixtures/recipients/`), the SHA-256 re-verify path executes, and `verify-restore.sh` chained from the daily script returns green probes.
+   5. Tears down the smoke containers and exits 0 on success, non-zero on any failure.
+   6. **CI hook:** add to `.github/workflows/backup-smoke.yml` (or equivalent if the operator picks a different CI later) to run on every PR touching `scripts/backup/`. Currently this project has no CI configured per `SPEC.md`; until CI lands, the operator runs this script manually before any change to `scripts/backup/*.sh` lands on main. Document in `scripts/backup/README.md §2.5.6`.
+   
+   This is the integration test that converts the bash workers from "untested" to "tested against real Postgres". Project rule `base-standards.md §5` forbids mocking the database; this script is the conforming alternative.
+
+## 5. Verification probe suite — `scripts/backup/verify-queries.sql`
+
+- [ ] 5.1 `SELECT count(*) FROM myfinance.transactions` with threshold `>= 300` and probe key `transactions_count`
+- [ ] 5.2 `SELECT count(*) FROM myfinance.accounts` with threshold `>= 1` and probe key `accounts_count` — **M8 fix**: previous draft was `WHERE active = true >= 3` which tested operator business state (how many cards), not backup integrity, and would fire false alarms the day a card is archived
+- [ ] 5.3 `SELECT count(*) FROM myfinance.categories` with threshold `>= 19` and probe key `categories_count`
+- [ ] 5.4 `SELECT count(*) FROM auth.users` with threshold `>= 1` and probe key `auth_users_count` (the verify-restore stub plus the `--data-only` load should produce ≥ 1 row)
+- [ ] 5.5 **DROPPED (B3 fix):** the previous `latest_transaction_age_days <= 7` probe is REMOVED. That signal — recency of ingest — conflates backup integrity with ingest health. A 10-day vacation or a Christmas-week dip in transaction volume would fire false alerts on a perfectly valid backup. Recency monitoring is a separate concern, deliberately out of scope for this verify suite.
+- [ ] 5.6 Add a header comment (m19 fix — be honest about probe semantics):
+   ```
+   -- verify-queries.sql v1 — restore probe suite for MyFinanceView backups.
+   --
+   -- SEMANTICS: these thresholds are SMOKE DETECTORS, not ALARMS. They catch
+   -- "the restore produced an empty or near-empty database" — a structural
+   -- failure. They do NOT catch row-level corruption that stays within the
+   -- threshold (e.g. losing 50 of 400 transactions, since 350 still ≥ 300).
+   -- A proper integrity alarm would compare against the previous successful
+   -- verify's counts (requires persistent state on R2; deferred).
+   --
+   -- WHEN TO RE-BASELINE: bump the floors after a meaningful schema change
+   -- (e.g. when `savings_goals` lands, add a probe with a sensible floor;
+   -- when `transactions` count durably exceeds 1000, raise its floor to ~700).
+   -- Always bump the version number at the top of this file when editing.
+   ```
+
+## 6. Dockerfile and compose extension
+
+- [ ] 6.1 Write `scripts/backup/Dockerfile.runner` based on **`node:22-alpine3.21`** (pinned — Alpine 3.21 is the first release that carries `postgresql17-client` in apk); `apk add --no-cache postgresql17-client age rclone docker-cli tar gzip curl jq bash tini util-linux` (util-linux for `uuidgen`); assert `pg_dump --version | grep '^pg_dump (PostgreSQL) 17\.'` in the same RUN layer so the build fails fast if the package install drifts; `COPY runner/`, `COPY workers/ /opt/myfinance-backup/workers/`, **`COPY recipients/ /opt/myfinance-backup/recipients/`** (B1 fix — both primary.txt and recovery.txt are needed for the two-recipient encryption pass); `chmod +x` the workers; `chmod -R 0444 /opt/myfinance-backup/recipients/` (recipients are read-only inside the image — a compromised runner cannot rewrite them to a recipient the attacker controls); entrypoint `/sbin/tini --`; CMD `node server.js`
+- [ ] 6.2 Build the image locally on the VPS via `docker compose -f n8n/docker-compose.yml -f scripts/backup/docker-compose.yml build myfinance-backup-runner`; the build itself asserts `pg_dump --version` reports 17.x, so success of `docker compose build` is sufficient evidence. Smoke: `docker run --rm myfinance-backup-runner pg_dump --version` reports `pg_dump (PostgreSQL) 17.x`
+- [ ] 6.2b **Alpine pin freshness check (finding #11 fix — Alpine 3.21 EOLs eventually; the change may sit unimplemented for months):** before activation, confirm that `node:22-alpine3.21` STILL pulls AND `apk add postgresql17-client` still resolves. Run `docker pull node:22-alpine3.21` and `docker run --rm node:22-alpine3.21 sh -c "apk update && apk search postgresql17-client | head -1"`; expect the search to return a `postgresql17-client-…` package line. If the base image has been retagged to a non-existent digest OR the apk package has been renamed/removed, the pin needs updating BEFORE activation. Update `scripts/backup/Dockerfile.runner` accordingly (likely bumping to `node:22-alpine3.22` or whatever the current Alpine LTS is) and re-run task 6.2. Document the verified pin and date in `scripts/backup/README.md §2.5.2` (architecture) so a future operator can repeat the check on rotation.
+- [ ] 6.3 Write `scripts/backup/docker-compose.yml` defining the `myfinance-backup-runner` service:
+   - [ ] 6.3.1 Image built from `Dockerfile.runner`; `restart: unless-stopped`; `env_file: ./.env.local`; resource limits 256 MB RAM; NO host port published
+   - [ ] 6.3.2 `networks: [n8n_net]` only; declare `n8n_net` as `external: true` in the `networks:` top-level section
+   - [ ] 6.3.3 Bind-mount the persistent runner state: `/var/lib/myfinance-backup:/var/lib/myfinance-backup` (read-write — holds `status/`, `logs/`, `working/`)
+   - [ ] 6.3.4 Bind-mount the Docker socket: `/var/run/docker.sock:/var/run/docker.sock` (read-write — needed to spawn the ephemeral `postgres:17` verify container)
+   - [ ] 6.3.5 Declare an ephemeral tmpfs for verify working dirs OUTSIDE the persistent bind-mount: `tmpfs: ["/var/lib/myfinance-verify:size=512m,mode=0700"]`. The hermano-path (`/var/lib/myfinance-verify`, not nested under `/var/lib/myfinance-backup`) avoids Docker's nested-mount edge cases. Plaintext decrypted snapshots live ONLY in this tmpfs.
+   - [ ] 6.3.6 Workers MUST NOT call `mount`/`umount` — the tmpfs is declared at compose level, no `CAP_SYS_ADMIN` required inside the container
+- [ ] 6.4 Declare `n8n_net` as `external: true` in this compose file so it joins the existing network created by n8n's compose project
+- [ ] 6.5 Smoke test on the VPS: `docker compose ... up -d myfinance-backup-runner`; from inside the n8n container `curl http://myfinance-backup-runner:8080/healthz` returns 200
+
+## 7. n8n workflows (`scripts/backup/n8n/`)
+
+- [ ] 7.1 Author `MyFinanceBackup-Daily.json`: Schedule Trigger (02:30 America/Bogota) → HTTP Request POST `http://myfinance-backup-runner:8080/run/daily` with header `X-Runner-Secret = {{ $credentials.runnerSecret }}` and **1200s timeout** (covers pg_dump + chained restore-verify; reviewer Q2 fix) → on non-2xx the workflow's Error Trigger fires
+- [ ] 7.2 Author `MyFinanceBackup-PreOp.json`: Webhook Trigger (path `myfinance-backup-preop`, method POST, response mode `responseNode`) + Manual Trigger → Function node validates `X-Webhook-Secret` AND validates `reason` against **`^[A-Za-z0-9._+-]{3,60}$` (B4 fix)** — on regex failure return HTTP 400 with body `{"error":"invalid_reason","regex":"^[A-Za-z0-9._+-]{3,60}$","got":"<input>","example_accepted":"flyway-baseline","example_accepted_2":"v4.1-migration"}` → HTTP Request POST `http://myfinance-backup-runner:8080/run/preop` with body `{"reason": "{{ $json.reason }}"}` and **1200s timeout** → Respond to Webhook node returns the sidecar's JSON status code and body
+- [ ] 7.3 **DROPPED — verify is now chained inside Daily (reviewer Q2 fix).** The previous `MyFinanceBackup-VerifyRestore.json` (Sunday 03:30 weekly verify) is REMOVED from this change. Reason: a verify-lag of up to 6 days is too long for a single-user system with cheap VPS CPU. The `/run/verify` HTTP endpoint stays on the sidecar for ad-hoc operator invocation.
+- [ ] 7.4 Author `MyFinanceBackup-Watchdog.json`: Schedule Trigger (daily 09:00 America/Bogota) → HTTP Request GET `http://myfinance-backup-runner:8080/status` → IF node: if `lastSuccess` is null OR `(now - lastSuccess.timestamp) > 30h` OR `lastVerify` is null OR `(now - lastVerify.timestamp) > 30h`, call the shared "Dispatch Alert" sub-workflow with title `MyFinance backup STALE` and body containing the JSON status. Watching both timestamps catches the case where the daily run uploaded but verify failed (in which case `last-success.json` is NOT updated but `last-verify.json` is — operator should still see the alert). **Additionally (finding #5 fix — disaster-drill cadence probe):** the same workflow MUST also fetch `r2://my-finance-view-backups/status/last-drill.json` (the `/status` endpoint surfaces it as `lastDrill`); if `lastDrill` is null OR `(now - lastDrill.timestamp) > 400 days`, the workflow MUST invoke the Dispatch Alert sub-workflow with title `MyFinance backup drill OVERDUE` and a body pointing at `scripts/backup/README.md §2.5.7`. This alert is low-severity (does not fail the daily pipeline) but fires on every watchdog tick until the operator uploads a fresh drill JSON.
+- [ ] 7.5 Author `MyFinanceBackup-ErrorHandler.json`: Error Trigger (binds to the workflows above) → Dispatch Alert sub-workflow with title derived from the failing workflow name
+- [ ] 7.6 Author `MyFinanceBackup-DispatchAlert.json` (the shared sub-workflow): Execute Workflow trigger taking `{title, body}` → ntfy HTTP Request POST `https://ntfy.sh/{{ $credentials.ntfyTopic }}` with title header (Continue On Fail = true) → in parallel Gmail Send Email node configured with credential `MYFINANCE_BACKUP_GMAIL_APP_PASSWORD` pinned to `host=smtp.gmail.com port=587 secure=false (STARTTLS) user=aftorresl01@gmail.com` (M13 fix; Continue On Fail = true) → both fire regardless of the other's outcome; the workflow never returns a non-2xx so calling workflows do not double-alert
+- [ ] 7.7 Validate every workflow file with `jq empty < scripts/backup/n8n/<file>.json` and confirm n8n's importer accepts it (manual UI import on the VPS). The set of committed workflows is now **FIVE**: Daily, PreOp, Watchdog, ErrorHandler, DispatchAlert
+
+## 8. VPS deployment
+
+- [ ] 8.0 **Commit the Traefik IP allowlist config (M3 fix):** create `traefik/dynamic/myfinance-preop.yml` with the IP allowlist middleware AND a router rule that attaches the middleware to the `myfinance-backup-preop` webhook path on `n8n.datachefnow.com`. Use CIDRs captured in task 1.12. Concrete:
+   ```yaml
+   http:
+     middlewares:
+       myfinance-preop-allowlist:
+         ipAllowList:
+           sourceRange:
+             - "<operator home /32>"
+             # add hotspot / VPN ranges as needed
+     routers:
+       myfinance-preop:
+         rule: "Host(`n8n.datachefnow.com`) && PathPrefix(`/webhook/myfinance-backup-preop`)"
+         entryPoints: [websecure]
+         middlewares: [myfinance-preop-allowlist]
+         service: n8n
+         tls:
+           certResolver: letsencrypt
+   ```
+   On Traefik's file provider reload (auto), the route is now allowlist-gated. Test from a non-allowlisted IP: expect HTTP 403 from Traefik, no n8n hit. Test from your home IP: expect 401 (no secret) — confirms layering works.
+- [ ] 8.1 On the VPS, populate `scripts/backup/.env.local` (gitignored) with every secret from §1 and §2.4 INCLUDING `MYFINANCE_BACKUP_HEALTHCHECKS_URL`; verify file mode `600` and owner = the operator user. Configure the `rclone` remote in `~/.config/rclone/rclone.conf` (or `/etc/rclone.conf` for system-wide use) with **`provider = Cloudflare`** under `[r2]`:
+   ```
+   [r2]
+   type = s3
+   provider = Cloudflare
+   access_key_id = <BACKUP_R2_ACCESS_KEY_ID>
+   secret_access_key = <BACKUP_R2_SECRET_ACCESS_KEY>
+   endpoint = https://<BACKUP_R2_ACCOUNT_ID>.r2.cloudflarestorage.com
+   acl = private
+   ```
+- [ ] 8.2 BEFORE `docker compose up`, confirm the existing n8n's Docker network name matches what the compose file declares: `docker network ls | grep n8n_net` MUST return a row. If the operator's n8n compose project actually created a different network name (e.g. `n8n_default`, `<project>_n8n_net`), either rename it for consistency or override the `networks` block in `scripts/backup/docker-compose.yml` accordingly — the runner WILL fail to start otherwise and the n8n workflows' `http://myfinance-backup-runner:8080` URL silently fails name resolution
+- [ ] 8.3 `docker compose -f n8n/docker-compose.yml -f scripts/backup/docker-compose.yml up -d myfinance-backup-runner` and confirm `docker ps` lists the container as healthy
+- [ ] 8.4 From the n8n UI, Import each `scripts/backup/n8n/*.json` file in order (FIVE files: Daily, PreOp, Watchdog, ErrorHandler, DispatchAlert); map credentials in n8n's Credentials UI: `MYFINANCE_BACKUP_AGE_IDENTITY` (primary identity for verify), `MYFINANCE_BACKUP_RUNNER_SECRET`, `MYFINANCE_PREOP_WEBHOOK_SECRET`, `MYFINANCE_BACKUP_NTFY_TOPIC`, `MYFINANCE_BACKUP_GMAIL_APP_PASSWORD`, `MYFINANCE_BACKUP_KUMA_PUSH_URL`, **`MYFINANCE_BACKUP_HEALTHCHECKS_URL`**
+- [ ] 8.5 Confirm Traefik picked up the webhook route and the allowlist middleware by checking the Traefik dashboard / logs; test FROM a non-allowlisted IP returns 403 (the allowlist is enforced), and FROM an allowlisted IP with wrong secret returns 401 (the secret is enforced beneath the allowlist)
+- [ ] 8.6 Confirm Uptime Kuma push URL is reachable from inside the runner container: `docker exec myfinance-backup-runner curl -fsS "$MYFINANCE_BACKUP_KUMA_PUSH_URL?status=up&msg=test"` returns 2xx
+- [ ] 8.7 Confirm healthchecks.io check URL is reachable from inside the runner container: `docker exec myfinance-backup-runner curl -fsS "$MYFINANCE_BACKUP_HEALTHCHECKS_URL"` returns 2xx; visit the healthchecks.io dashboard to confirm the check went from "new" to "up" (M1 fix)
+
+## 9. Smoke tests
+
+- [ ] 9.1 From the operator's Windows PC, `curl http://<vps-public-ip>:8080/healthz` SHOULD fail (connection refused) — confirms the runner is not internet-exposed
+- [ ] 9.2 **From a NON-allowlisted IP (e.g. mobile data with VPN off if home IP is `/32`-allowlisted): `curl -X POST https://n8n.datachefnow.com/webhook/myfinance-backup-preop -H 'X-Webhook-Secret: wrong' -d '{}'` SHOULD return 403** (Traefik rejected before n8n; M3 fix verification)
+- [ ] 9.3 From an allowlisted IP, `curl -X POST https://n8n.datachefnow.com/webhook/myfinance-backup-preop -H 'X-Webhook-Secret: wrong' -d '{}'` returns 401 (allowlist passed, secret rejected)
+- [ ] 9.4 From an allowlisted IP, send a malformed reason: `curl ... -d '{"reason":"Flyway Baseline!"}'` returns 400 with body containing `regex` AND `example_accepted` keys (B4 fix verification)
+- [ ] 9.5 From an allowlisted IP, send a valid mixed-case dotted reason: `curl ... -d '{"reason":"v4.1-migration_attempt2"}'` returns 200 and the eventual artefact path contains the literal slug (B4 fix verification)
+- [ ] 9.6 From n8n's UI "Execute Workflow" run `MyFinanceBackup-PreOp` with `reason="initial-bootstrap"`; expect HTTP 200, an artefact in `pre-op/` on R2, AND `verifyResult.probes` green in the response, AND `status/last-preop.json` updated on R2
+- [ ] 9.7 From the operator's Windows PC (allowlisted IP), set `$env:PREOP_SECRET` from a password manager (NOT typed on the command line — avoid shell history capture), then: `curl.exe -X POST https://n8n.datachefnow.com/webhook/myfinance-backup-preop -H "X-Webhook-Secret: $env:PREOP_SECRET" -H "Content-Type: application/json" --data-binary "@preop-reason.json"` where `preop-reason.json` contains `{"reason":"manual-smoke"}`. Expect 200 with the sidecar's JSON payload. Delete `preop-reason.json` after the test.
+- [ ] 9.8 **Recovery-identity drill (B1 fix smoke):** on a clean machine (NOT the operator's primary PC), retrieve envelope `#2` from location B, type the recovery identity into a local file, run `age -d -i recovery-identity.txt < <one-pre-op-snapshot-downloaded-from-R2>.tar.age > /tmp/check.tar` and confirm `tar -tf /tmp/check.tar` lists the three expected files. Then wipe `/tmp/check.tar` and the typed identity file. This proves the recovery chain works end-to-end.
+- [ ] 9.9 Force a failure to test the alerting path: temporarily set `BACKUP_DB_PASSWORD` to an invalid value in `.env.local`, restart the runner, trigger `MyFinanceBackup-Daily` manually; confirm BOTH ntfy push and Gmail email arrive AND that Kuma has NOT been pinged AND that healthchecks.io has NOT been pinged
+- [ ] 9.10 Restore the correct password; trigger `MyFinanceBackup-Daily` manually again; confirm `last-success.json` AND `last-verify.json` update, the Kuma monitor shows "Up", AND the healthchecks.io check shows "up" (M1 fix verification)
+- [ ] 9.11 Force a verify-failure path: temporarily lower a probe threshold in `verify-queries.sql` (e.g. set transactions floor to `>= 9999999`), trigger `MyFinanceBackup-Daily` manually; confirm the artefact is moved server-side from `daily/` to `quarantine/<timestamp>-daily-<file>`, `status/last-verify.json` records the failing probe, alerts fire (M15 fix verification). Restore the threshold after the test.
+- [ ] 9.12 Trigger `MyFinanceBackup-Watchdog` manually after rewinding `last-success.json` to a timestamp > 30 h old; confirm dual-channel alert fires
+
+## 10. Activation
+
+- [ ] 10.1 In n8n, set Schedule Trigger to Active for `MyFinanceBackup-Daily` and `MyFinanceBackup-Watchdog` (no separate VerifyRestore schedule — verify is chained inside Daily)
+- [ ] 10.2 Wait one full 24-hour cycle; confirm the daily run fired automatically at 02:30 BOG, the daily/ artefact lands in R2, `last-success.json` AND `last-verify.json` update, Kuma shows the push received, healthchecks.io shows the ping received
+- [ ] 10.3 Wait one full week; confirm Sunday's run promoted to `weekly/` AND `last-verify.json` continues to update green for every daily run in that week
+- [ ] 10.4 If today's date is the 1st of a month at the time of activation, manually fire `MyFinanceBackup-Daily` again to confirm the `monthly/` promotion path; otherwise set a calendar reminder to spot-check on the 1st
+- [ ] 10.5 **Calendar reminder — monthly external-disk archive (M11):** set a recurring calendar reminder (1st of each month, 10:00 BOG) titled "rclone copy r2:my-finance-view-backups/monthly/ E:\myfinance-backups-archive\" with the full command in the body. Operator habit, not an n8n workflow (operator decision 2026-05-13).
+- [ ] 10.6 **Annual disaster drill calendar reminder + initial drill (finding #5 fix):** set a recurring annual reminder (e.g. January 15th) titled "MyFinance backup disaster drill" with checklist body referencing `scripts/backup/README.md §2.5.7`. THEN perform the initial drill immediately as part of activation: retrieve both papers (locations A and B), confirm legibility, decrypt one snapshot end-to-end on a clean machine using the recovery paper, then upload the result to R2:
+   ```bash
+   # Generate and upload last-drill.json as part of bootstrap
+   cat > /tmp/last-drill.json <<EOF
+   {"timestamp":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","papers_intact":{"primary":true,"recovery":true},"reprinted":[],"snapshot_used":"<the snapshot path>","operator_initial":"AT"}
+   EOF
+   rclone copy /tmp/last-drill.json r2:my-finance-view-backups/status/
+   rm /tmp/last-drill.json
+   ```
+   Without this initial drill artefact, the watchdog (task 7.4) will start firing `MyFinance backup drill OVERDUE` from day 1 of activation.
+
+## 11. Documentation and memory updates
+
+- [ ] 11.1 Add section "Backup & disaster recovery" to `docs/development-guide.md` covering daily cadence (with chained verify), pre-op procedure (curl example with IP-allowlisted source), restore procedure from snapshot (both primary AND recovery identity paths documented), age key rotation procedures
+- [ ] 11.2 Add subsection "Backup before any Supabase write" to `docs/development-guide.md` listing covered operations (Flyway migrate/baseline/repair/clean, ad-hoc DDL/DML via psql, MCP apply_migration, MCP execute_sql) and the freshness expectations (24 h daily / 60 min pre-op). **Use the words "expected" / "should" / "operator discipline" — NOT "blocked" / "refuses" / "enforced" (B6 fix — the gate is documentation-only and the docs must reflect that honestly)**
+- [ ] 11.3 Cross-reference the new section from `SPEC.md §12` (Próximos Pasos Inmediatos)
+- [ ] 11.4 Cross-reference the new section from `docs/data-model.md §3` (migrations section)
+- [ ] 11.5 Update auto-memory `project_supabase_production_data.md` to add a `[[supabase-backup-policy]]` link and the explicit "24 h daily or 60 min pre-op" freshness expectation (NOT "rule"). Replace the "backup policy pendiente" note with "backup policy live since YYYY-MM-DD". This is an OPERATOR action (the auto-memory store is user-scoped, not project-scoped); listed here so the operator does not forget it during /opsx:archive.
+
+## 12. Validation and archive
+
+- [ ] 12.1 Run `openspec validate supabase-backup-policy --strict` from the repo root; fix any structural complaints until it passes clean
+- [ ] 12.2 Run the adversarial-review skill against the change; address any Blocker or Major findings
+- [ ] 12.3 Update the change with a note in `proposal.md` confirming the policy is live and the bootstrap artefact path
+- [ ] 12.4 Notify the project page on Notion that `flyway-migrations` §7 is unblocked
+- [ ] 12.5 `/opsx:archive supabase-backup-policy` and `/openspec-sync-specs` to merge the delta into `openspec/specs/database-backups/`
