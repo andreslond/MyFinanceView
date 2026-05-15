@@ -29,3 +29,6 @@ HELP.md
 # OS
 .DS_Store
 Thumbs.db
+
+# Google Drive sync junk
+*.tmp.driveupload
