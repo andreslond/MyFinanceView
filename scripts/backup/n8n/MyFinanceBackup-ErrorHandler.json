@@ -1,0 +1,90 @@
+{
+  "name": "MyFinanceBackup-ErrorHandler",
+  "active": false,
+  "nodes": [
+    {
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {}
+    },
+    {
+      "id": "extract-error-info",
+      "name": "Extract Error Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "jsCode": "const errorData = $input.first().json;\nconst workflowName = errorData.workflow?.name || 'Unknown workflow';\nconst nodeName = errorData.execution?.lastNodeExecuted || 'Unknown node';\nconst errorMsg = errorData.execution?.error?.message || 'No error message';\nconst executionId = errorData.execution?.id || 'N/A';\n\nconst title = `MyFinance backup ERROR — ${workflowName}`;\nconst body = `Workflow: ${workflowName}\\nFailed node: ${nodeName}\\nError: ${errorMsg}\\nExecution ID: ${executionId}`;\n\nreturn [{ json: { title, body } }];"
+      }
+    },
+    {
+      "id": "dispatch-alert",
+      "name": "Dispatch Alert",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "parameters": {
+        "workflowId": "MyFinanceBackup-DispatchAlert",
+        "options": {},
+        "workflowInputs": {
+          "value": {
+            "title": "={{ $json.title }}",
+            "body": "={{ $json.body }}"
+          },
+          "schema": [
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Error Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Error Info": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": ["backup", "myfinance"]
+}

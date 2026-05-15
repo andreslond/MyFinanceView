@@ -26,6 +26,16 @@ HELP.md
 .env.*
 !.env.example
 
+# age encryption identities (private keys — NEVER commit)
+age-identity*
+**/age-identity*
+*.identity
+# Whitelist: recipient PUBLIC keys (needed for two-recipient encryption)
+!scripts/backup/recipients/*.txt
+# Safety net: reject any file whose first line starts with the age secret-key marker
+# (enforced via pre-commit hook pattern — see scripts/backup/README.md §2.5.5)
+AGE-SECRET-KEY-*
+
 # OS
 .DS_Store
 Thumbs.db

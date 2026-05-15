@@ -1,0 +1,40 @@
+# traefik/dynamic/myfinance-preop.yml
+#
+# Traefik dynamic file-provider config for the MyFinance pre-op backup webhook.
+# This file is auto-reloaded by Traefik on change (file provider watchdirs).
+#
+# Purpose: restrict the pre-op webhook path to the operator's IP address(es)
+# before n8n ever sees the request. Even if the X-Webhook-Secret leaks,
+# requests from non-allowlisted IPs return 403 without touching n8n.
+#
+# Task 8.0 (M3 fix): operator must replace <operator home /32> with the
+# actual public IP captured at task 1.12 before deploying.
+# Add hotspot / VPN ranges as additional entries if the operator triggers
+# pre-op backups from mobile connections.
+#
+# Verification:
+#   From non-allowlisted IP: curl -X POST https://n8n.datachefnow.com/webhook/myfinance-backup-preop
+#   Expected: HTTP 403 (Traefik rejects — n8n is never hit)
+#
+#   From allowlisted IP with wrong secret:
+#   Expected: HTTP 401 (allowlist passed, n8n rejected the secret)
+
+http:
+  middlewares:
+    myfinance-preop-allowlist:
+      ipAllowList:
+        sourceRange:
+          - "<operator home /32>"
+          # Add hotspot or VPN egress ranges here as needed, e.g.:
+          # - "203.0.113.0/24"
+
+  routers:
+    myfinance-preop:
+      rule: "Host(`n8n.datachefnow.com`) && PathPrefix(`/webhook/myfinance-backup-preop`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - myfinance-preop-allowlist
+      service: n8n
+      tls:
+        certResolver: letsencrypt

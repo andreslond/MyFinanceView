@@ -188,7 +188,107 @@ docker compose -f docker/docker-compose.yml up -d
 ```
 The `-v` flag drops volumes; migrations in `database/migrations/` re-run on start.
 
-## 11. Troubleshooting
+## 11. Backup & Disaster Recovery
+
+### Daily cadence
+
+Every day at 02:30 America/Bogota, the `MyFinanceBackup-Daily` n8n workflow fires a `POST /run/daily` to the `myfinance-backup-runner` sidecar container. The run:
+
+1. `pg_dump` the `myfinance` schema + `auth.users` via the Supabase Session Pooler.
+2. Encrypts the bundle with `age` using **two recipients** (primary + recovery public keys baked into the image).
+3. Uploads to `r2:my-finance-view-backups/daily/YYYY-MM-DD.tar.age`.
+4. Re-downloads and re-computes SHA-256 (M12 fix — detects truncated multipart uploads).
+5. Chains `verify-restore.sh` immediately: decrypts, restores into an ephemeral `postgres:17` container, runs probes in `verify-queries.sql`, updates `status/last-verify.json` on R2.
+6. Pings Uptime Kuma (in-VPS dead-man-switch) and healthchecks.io (off-VPS) on success only.
+
+On failure any step exits non-zero, ntfy.sh push + Gmail SMTP alert fire, and neither dead-man-switch is pinged — both will alert after their grace period (6 h).
+
+### Pre-op backup procedure (before any Supabase write)
+
+Before running Flyway migrate/baseline/repair/clean, any ad-hoc DDL/DML via psql, MCP `apply_migration`, or MCP `execute_sql`, the operator should trigger a pre-op snapshot. This is an **operator discipline expectation** — there is no programmatic gate. The template is at `openspec/templates/supabase-write-checklist.md`.
+
+Freshness expectations:
+- **24 h** — a green daily backup is enough for low-risk additive migrations.
+- **60 min** — a pre-op snapshot is expected before destructive writes (DROP, TRUNCATE, Flyway baseline on non-empty DB).
+
+Trigger a pre-op snapshot from an IP-allowlisted machine (see `traefik/dynamic/myfinance-preop.yml`):
+
+```sh
+export PREOP_SECRET=<from password manager>
+echo '{"reason":"flyway-baseline"}' > /tmp/preop-reason.json
+curl -X POST https://n8n.datachefnow.com/webhook/myfinance-backup-preop \
+  -H "X-Webhook-Secret: $PREOP_SECRET" \
+  -H "Content-Type: application/json" \
+  --data-binary "@/tmp/preop-reason.json"
+rm /tmp/preop-reason.json
+# Expected: HTTP 200, JSON with artefact path + verifyResult.probes (all passed: true)
+```
+
+Reason slug must match `^[A-Za-z0-9._+-]{3,60}$`. Spaces and exclamation marks are rejected with HTTP 400.
+
+### Restore from snapshot (primary identity)
+
+```sh
+# Download snapshot from R2 (Cloudflare dashboard or rclone)
+rclone copy r2:my-finance-view-backups/daily/2026-05-13.tar.age .
+
+# Decrypt with primary identity (on operator's Windows PC)
+age -d -i %USERPROFILE%\.config\myfinance-backup\age-identity-primary.txt ^
+    -o snapshot.tar 2026-05-13.tar.age
+
+# Extract
+tar -xf snapshot.tar
+# Produces: auth-users.dump, myfinance.dump, README.txt
+
+# Restore (auth stub first, then myfinance)
+pg_restore -h <host> -U postgres -d myfinance_restore \
+    --data-only --table=users -Fc auth-users.dump
+pg_restore -h <host> -U postgres -d myfinance_restore \
+    -Fc myfinance.dump
+```
+
+### Restore from snapshot (recovery identity — disaster scenario)
+
+On a CLEAN machine (not the operator's primary PC), retrieve envelope #2 from physical location B:
+
+```sh
+# Type the recovery identity from paper into a local file
+nano recovery-identity.txt   # paste AGE-SECRET-KEY-... line
+
+age -d -i recovery-identity.txt -o snapshot.tar <snapshot>.tar.age
+tar -tf snapshot.tar          # confirm: auth-users.dump, myfinance.dump, README.txt
+shred -u recovery-identity.txt
+```
+
+### Key rotation
+
+See `scripts/backup/README.md §2.5.5` for per-secret rotation procedures.
+
+### Annual disaster drill
+
+Perform every January per `scripts/backup/README.md §2.5.7`. After the drill, upload `last-drill.json` to `r2:my-finance-view-backups/status/` to reset the Watchdog's "drill OVERDUE" alert.
+
+---
+
+## 12. Backup before any Supabase write
+
+The following operations should be preceded by a verified backup within the expected freshness window:
+
+| Operation | Freshness expectation |
+|---|---|
+| `flyway:migrate` (additive migration) | 24 h daily |
+| `flyway:baseline`, `flyway:repair`, `flyway:clean` | 60 min pre-op |
+| Ad-hoc DDL/DML via `psql` | 60 min pre-op for DROP/TRUNCATE/bulk UPDATE |
+| MCP `apply_migration` | 60 min pre-op |
+| MCP `execute_sql` with mutations | 60 min pre-op |
+
+These are **expected** disciplines, not enforced gates. The system does not block writes programmatically. Use the checklist template at `openspec/templates/supabase-write-checklist.md`.
+
+See also [data-model.md §3](data-model.md) and [SPEC.md §12](../SPEC.md).
+
+---
+
+## 13. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|

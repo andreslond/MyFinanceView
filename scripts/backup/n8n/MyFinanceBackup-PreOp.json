@@ -1,0 +1,146 @@
+{
+  "name": "MyFinanceBackup-PreOp",
+  "active": false,
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 260],
+      "parameters": {
+        "path": "myfinance-backup-preop",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "myfinance-backup-preop"
+    },
+    {
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 420],
+      "parameters": {}
+    },
+    {
+      "id": "validate-secret-and-reason",
+      "name": "Validate Secret and Reason",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "jsCode": "// Validate X-Webhook-Secret header and reason slug\nconst REASON_REGEX = /^[A-Za-z0-9._+-]{3,60}$/;\nconst expectedSecret = $env['MYFINANCE_PREOP_WEBHOOK_SECRET'] || '';\n\n// When triggered manually, skip secret validation\nconst isWebhook = $input.first().json.headers !== undefined;\nif (isWebhook) {\n  const providedSecret = ($input.first().json.headers || {})['x-webhook-secret'] || '';\n  if (providedSecret !== expectedSecret || !expectedSecret) {\n    throw new Error('UNAUTHORIZED');\n  }\n}\n\nconst body = $input.first().json.body || $input.first().json;\nconst reason = (body.reason || '').trim();\n\nif (!REASON_REGEX.test(reason)) {\n  const result = {\n    error: 'invalid_reason',\n    regex: REASON_REGEX.source,\n    got: reason,\n    example_accepted: 'flyway-baseline',\n    example_accepted_2: 'v4.1-migration'\n  };\n  // Use $response to set status 400\n  $response.statusCode = 400;\n  return [{ json: result }];\n}\n\nreturn [{ json: { reason } }];"
+      }
+    },
+    {
+      "id": "http-run-preop",
+      "name": "POST /run/preop",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [700, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "http://myfinance-backup-runner:8080/run/preop",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Runner-Secret",
+              "value": "={{ $credentials.runnerSecret }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "reason",
+              "value": "={{ $json.reason }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 1200000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "respond-to-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [920, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.body || $json) }}",
+        "options": {
+          "responseCode": "={{ $json.statusCode || 200 }}"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Secret and Reason",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Secret and Reason",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Secret and Reason": {
+      "main": [
+        [
+          {
+            "node": "POST /run/preop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST /run/preop": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": "MyFinanceBackup-ErrorHandler"
+  },
+  "tags": ["backup", "myfinance"]
+}

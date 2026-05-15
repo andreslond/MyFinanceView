@@ -117,7 +117,23 @@ UNIQUE (base_currency, target_currency, effective_date)
 ```
 Empty. RLS: read = all authenticated; write = service role.
 
-## 3. Pending Migrations (TASK-DB-01..05)
+## 3. Backup & Migration Safety
+
+> **Before running any migration against the Supabase remote, a verified backup is expected.**
+>
+> - **24 h** — a green daily backup is sufficient for additive migrations.
+> - **60 min** — a pre-op snapshot should be triggered before destructive or high-risk writes
+>   (DROP, TRUNCATE, Flyway baseline on a non-empty DB, bulk UPDATE/DELETE).
+>
+> These are operator discipline expectations, not enforced programmatic gates.
+> Use the checklist template at [`openspec/templates/supabase-write-checklist.md`](../openspec/templates/supabase-write-checklist.md)
+> as task 0 in any change that writes to Supabase.
+>
+> For the full backup procedure (restore from snapshot, key rotation, disaster drill),
+> see [`docs/development-guide.md §11–12`](development-guide.md) and
+> [`scripts/backup/README.md`](../scripts/backup/README.md).
+
+## 4. Pending Migrations (TASK-DB-01..05)
 
 > Order matters. FK dependencies force this sequence.
 
@@ -183,7 +199,7 @@ CREATE INDEX idx_unconfirmed_txs
 ### V009 — TASK-SG-DB-01: savings_goals + contributions
 See [`plans/savings-goals-plan.md §3`](../plans/savings-goals-plan.md). Tables `savings_goals` and `savings_goal_contributions` with RLS, plus Storage bucket `goal-avatars`.
 
-## 4. ENUMs (already created in V001)
+## 5. ENUMs (already created in V001)
 
 ```sql
 account_type        : 'checking' | 'savings' | 'credit_card'
@@ -194,7 +210,7 @@ transaction_source  : 'gmail' | 'manual' | 'api'
 category_type       : 'expense' | 'income'
 ```
 
-## 5. Index Strategy (current + pending)
+## 6. Index Strategy (current + pending)
 
 | Table | Index | Type | Purpose |
 |---|---|---|---|
@@ -211,7 +227,7 @@ category_type       : 'expense' | 'income'
 | `savings_goals` | `user_id, status, priority` | BTREE | Goal listing (V009) |
 | `savings_goal_contributions` | `goal_id, occurred_at DESC` | BTREE | History (V009) |
 
-## 6. Open Decisions
+## 7. Open Decisions
 
 | Topic | Status | Reference |
 |---|---|---|
