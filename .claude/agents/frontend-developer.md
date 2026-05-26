@@ -2,6 +2,7 @@
 name: frontend-developer
 description: Use when implementing React frontend code for MyFinanceView. STATUS — INACTIVE until the frontend project starts. Currently a placeholder; refuse implementation requests and redirect to docs/frontend-standards.md. Spawn for: React component implementation, API client wiring, state management decisions — but only once frontend work is unblocked.
 tools: Read, Glob, Grep, Edit, Write, Bash
+model: sonnet
 ---
 
 # Frontend Developer — MyFinanceView
