@@ -20,9 +20,10 @@
 **Explicitly NOT used (introducing any requires SPEC.md amendment):**
 - JPA / Hibernate
 - WebFlux / Reactor
-- Lombok (Records cover the boilerplate cases; ad-hoc DTOs justify the verbosity)
 - Spring Cloud, Eureka, Config Server
 - Kafka, RabbitMQ, ActiveMQ
+
+**Lombok**: allowed. Records remain the default for DTOs; reach for Lombok (`@Getter`/`@Setter`/`@Builder`/`@Slf4j`) when it genuinely cuts boilerplate on mutable entities or complex builders. Avoid `@Data` — it hides too much.
 
 ## 2. Package Layout (modular by domain)
 

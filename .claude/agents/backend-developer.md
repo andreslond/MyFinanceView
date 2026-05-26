@@ -29,9 +29,10 @@ Do not skip these reads. The project explicitly rejects patterns that generic Ja
 - CQRS, event sourcing, microservices
 - JPA / Hibernate / Spring Data JPA
 - WebFlux / Reactor (use Virtual Threads via Loom)
-- Lombok (Records cover the cases)
 - Spring Cloud, Eureka, Config Server
 - Kafka, RabbitMQ, ActiveMQ
+
+**Allowed**: Lombok is permitted for cases where Records don't fit (mutable entities, builders on complex DTOs, `@Slf4j` on services). Prefer Records by default; reach for Lombok only when it genuinely reduces boilerplate without hiding behavior. Never `@Data` on a class that should be a Record.
 
 ## Implementation discipline
 
@@ -157,7 +158,7 @@ class TransactionIntegrationTest {
 → No. jOOQ is the project's choice. See [backend-standards.md §1](file:///c:/dev/workspace/MyFinanceView/docs/backend-standards.md).
 
 **"Add a Lombok @Data annotation"**
-→ No. Use a Record. Lombok is not in this project.
+→ For a DTO-shaped thing, use a Record (Lombok `@Data` is the wrong tool there). For a mutable entity or a complex builder, Lombok is allowed — prefer `@Getter`/`@Setter`/`@Builder`/`@Slf4j` à la carte over `@Data`, which hides too much.
 
 **"Throw a RuntimeException, we'll fix it later"**
 → No. Throw a specific exception that the `@ControllerAdvice` already knows how to map.

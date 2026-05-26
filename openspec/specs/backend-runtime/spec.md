@@ -51,7 +51,7 @@ The system SHALL run the embedded servlet container and Spring task executors on
 
 ### Requirement: Modular-by-domain package layout
 
-The system SHALL organize Java sources under `com.myfinanceview` in modules by bounded context (not by technical layer). The required top-level packages are: `api/controller`, `api/dto`, `api/exception`, `domain/transaction`, `domain/category`, `domain/merchant`, `domain/billing`, `domain/savings`, `db/repository`, `db/jooq`, and `config`. Each package MUST exist (with `package-info.java` if otherwise empty) so the convention is enforced from day one. Clean Architecture by layers, hexagonal ports-and-adapters maximalism, JPA/Hibernate, and Lombok MUST NOT be introduced.
+The system SHALL organize Java sources under `com.myfinanceview` in modules by bounded context (not by technical layer). The required top-level packages are: `api/controller`, `api/dto`, `api/exception`, `domain/transaction`, `domain/category`, `domain/merchant`, `domain/billing`, `domain/savings`, `db/repository`, `db/jooq`, and `config`. Each package MUST exist (with `package-info.java` if otherwise empty) so the convention is enforced from day one. Clean Architecture by layers, hexagonal ports-and-adapters maximalism, and JPA/Hibernate MUST NOT be introduced. Lombok MAY be used where Records do not fit (mutable entities, complex builders, `@Slf4j` logging); Records remain the default for DTOs.
 
 #### Scenario: All canonical packages exist in source tree
 
