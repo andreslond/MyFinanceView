@@ -32,3 +32,7 @@ Thumbs.db
 
 # Google Drive sync junk
 *.tmp.driveupload
+
+# Claude Code local state
+.claude/settings.local.json
+.claude/worktrees/
