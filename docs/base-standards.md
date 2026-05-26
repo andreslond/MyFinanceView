@@ -45,18 +45,26 @@ The project applies three composable disciplines:
 
 ### Workflow (per change)
 
+Canonical flow + the **4 mandatory human-in-the-loop gates** live in [`workflow.md`](workflow.md). When the summary below and `workflow.md` disagree, `workflow.md` wins. The side-window visual is [`workflow-cheatsheet.html`](workflow-cheatsheet.html).
+
+Phases (gates in **bold**):
+
 ```
-1. /enrich-us              — refine the user story (skill)
-2. /opsx:propose           — generate OpenSpec artifacts (proposal, design, specs, tasks)
-3. /opsx:apply             — implement following the task checklist, TDD per task
-4. adversarial-review      — red-team independent review (subagent or skill)
-5. /commit                 — focused commit + PR
-6. /opsx:archive           — close the change
-7. /openspec-sync-specs    — merge delta specs into canonical specs
-8. /update-docs            — sync SPEC.md, docs/, Notion to reflect what landed
+1. /enrich-us              — refine the user story
+2. /opsx:explore (opt)     — research before propose
+   ── Gate A: ARCHITECTURE DECISIONS (operator approves each, one at a time) ──
+3. /opsx:propose           — proposal.md + design.md + specs/
+   ── Gate B: TASK PLAN (operator approves bullet plan before tasks.md) ──
+4. /opsx:propose           — tasks.md
+   ── Gate D: START IMPLEMENTATION (operator confirms subagent + batch) ──
+5. /opsx:apply             — implement, delegating to backend-developer
+6. adversarial-review      — red-team independent review
+   ── Gate C: FINDING TRIAGE (Blocker/Major auto-in, Minor/Question need OK) ──
+7. /commit                 — focused commit + PR
+8. /opsx:archive → /openspec-sync-specs → /update-docs
 ```
 
-Skipping a step requires justification in the commit body.
+Skipping a phase OR a gate requires justification in the commit body. Gates without operator OK are a process bug, not a feature — interrupt and call it out.
 
 ## 4. Code Quality Bar
 

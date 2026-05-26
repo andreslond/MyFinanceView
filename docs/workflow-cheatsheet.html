@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>MyFinanceView — Workflow Cheat-Sheet</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root {
+    --bg: #fafaf9;
+    --panel: #ffffff;
+    --border: #e4e4e7;
+    --text: #18181b;
+    --muted: #71717a;
+    --phase: #2563eb;
+    --phase-bg: #dbeafe;
+    --gate: #dc2626;
+    --gate-bg: #fee2e2;
+    --async: #059669;
+    --async-bg: #d1fae5;
+    --warn: #d97706;
+    --warn-bg: #fef3c7;
+    --code-bg: #f4f4f5;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    font-size: 14px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: 100vh;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 24px 16px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+  }
+  nav.toc h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 12px 0;
+    letter-spacing: 0.05em;
+  }
+  nav.toc ol { list-style: none; padding: 0; margin: 0; }
+  nav.toc li { margin-bottom: 8px; }
+  nav.toc a {
+    color: var(--text);
+    text-decoration: none;
+    font-size: 13px;
+    display: block;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+  nav.toc a:hover { background: var(--bg); }
+  nav.toc .gate-link { color: var(--gate); font-weight: 600; }
+  main {
+    padding: 32px 48px;
+    max-width: 1100px;
+  }
+  header.hero {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 24px;
+    margin-bottom: 32px;
+  }
+  header.hero h1 { margin: 0 0 8px 0; font-size: 28px; }
+  header.hero .sub { color: var(--muted); font-size: 14px; }
+  header.hero .meta { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  header.hero a { color: var(--phase); }
+  section { margin-bottom: 48px; }
+  section h2 {
+    font-size: 20px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  section h3 { font-size: 16px; margin-top: 24px; margin-bottom: 8px; }
+  code, pre {
+    font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+    background: var(--code-bg);
+    border-radius: 3px;
+    font-size: 12px;
+  }
+  code { padding: 1px 6px; }
+  pre {
+    padding: 12px 16px;
+    overflow-x: auto;
+  }
+
+  /* === Timeline === */
+  .timeline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    align-items: stretch;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .phase {
+    flex: 1 1 0;
+    min-width: 140px;
+    background: var(--phase-bg);
+    color: var(--phase);
+    padding: 12px 14px;
+    margin: 4px 0;
+    border-radius: 6px;
+    font-size: 13px;
+    position: relative;
+  }
+  .phase .num {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.7;
+  }
+  .phase .name { font-weight: 600; margin-top: 4px; }
+  .phase .cmd {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 11px;
+    background: rgba(255,255,255,0.6);
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-top: 6px;
+    display: inline-block;
+  }
+  .gate-bar {
+    flex-basis: 100%;
+    background: var(--gate-bg);
+    color: var(--gate);
+    padding: 10px 16px;
+    margin: 6px 0;
+    border-radius: 6px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 2px dashed var(--gate);
+  }
+  .gate-bar .badge {
+    background: var(--gate);
+    color: white;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+  .gate-bar .desc { font-weight: 400; font-size: 13px; }
+
+  /* === Gate cards === */
+  .gate-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .gate-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--gate);
+    border-radius: 6px;
+    padding: 18px 22px;
+  }
+  .gate-card h3 {
+    margin-top: 0;
+    color: var(--gate);
+    font-size: 15px;
+  }
+  .gate-card .fires {
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+    margin-bottom: 12px;
+  }
+  .gate-card .role {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 12px;
+    margin-bottom: 4px;
+  }
+  .gate-card .role-claude { color: var(--phase); }
+  .gate-card .role-operator { color: var(--async); }
+  .gate-card ul { margin: 4px 0 0 0; padding-left: 20px; }
+  .gate-card li { margin-bottom: 4px; }
+  .pass {
+    margin-top: 12px;
+    padding: 8px 10px;
+    background: var(--warn-bg);
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .pass strong { color: var(--warn); }
+
+  /* === Tables === */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 13px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    background: var(--code-bg);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+  }
+  tr:last-child td { border-bottom: none; }
+
+  .sev-blocker { color: var(--gate); font-weight: 700; }
+  .sev-major { color: var(--warn); font-weight: 700; }
+  .sev-minor { color: var(--muted); font-weight: 600; }
+  .sev-question { color: var(--phase); font-weight: 600; }
+
+  /* === Async cards === */
+  .async-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .async-card {
+    background: var(--async-bg);
+    border-left: 4px solid var(--async);
+    padding: 14px 18px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  .async-card .phase-tag {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--async);
+    text-transform: uppercase;
+  }
+  .async-card .title { font-weight: 600; margin-top: 4px; }
+  .async-card .how {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .async-card .how code { background: rgba(255,255,255,0.7); }
+
+  /* === Callouts === */
+  .callout {
+    background: var(--warn-bg);
+    border-left: 4px solid var(--warn);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+  .callout strong { color: var(--warn); }
+
+  .interrupt {
+    background: var(--gate-bg);
+    border-left: 4px solid var(--gate);
+    padding: 16px 20px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .interrupt strong { color: var(--gate); }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    .gate-cards, .async-grid { grid-template-columns: 1fr; }
+    main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <h2>Workflow</h2>
+  <ol>
+    <li><a href="#timeline">1. Timeline</a></li>
+    <li><a href="#gates">2. Los 4 Gates</a></li>
+    <li><a href="#gate-a" class="gate-link">&nbsp;&nbsp;Gate A — Arquitectura</a></li>
+    <li><a href="#gate-b" class="gate-link">&nbsp;&nbsp;Gate B — Plan tareas</a></li>
+    <li><a href="#gate-d" class="gate-link">&nbsp;&nbsp;Gate D — Implementar</a></li>
+    <li><a href="#gate-c" class="gate-link">&nbsp;&nbsp;Gate C — Triage findings</a></li>
+    <li><a href="#findings">3. Severidad findings</a></li>
+    <li><a href="#async">4. Async / paralelo</a></li>
+    <li><a href="#commands">5. Comandos</a></li>
+    <li><a href="#interrupt">6. Cuándo interrumpir</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<header class="hero">
+  <h1>MyFinanceView — Workflow Cheat-Sheet</h1>
+  <div class="sub">Manual visual para tener abierto en otra ventana durante una sesión de Claude Code.</div>
+  <div class="meta">
+    Fuente canónica textual: <a href="workflow.md"><code>docs/workflow.md</code></a> &nbsp;·&nbsp;
+    Última actualización: 2026-05-21
+  </div>
+</header>
+
+<section id="timeline">
+  <h2>1. Timeline — 8 fases, 4 gates</h2>
+  <p style="color: var(--muted); font-size: 13px;">
+    Cada fase azul es trabajo del agente. Cada barra roja es un <strong>gate HITL obligatorio</strong>: Claude se detiene hasta que el operador da OK explícito.
+  </p>
+  <div class="timeline">
+    <div class="phase">
+      <div class="num">Fase 1</div>
+      <div class="name">Refinar historia</div>
+      <div class="cmd">/enrich-us</div>
+    </div>
+    <div class="phase">
+      <div class="num">Fase 2 (opt)</div>
+      <div class="name">Explorar</div>
+      <div class="cmd">/opsx:explore</div>
+    </div>
+    <div class="gate-bar">
+      <span class="badge">Gate A</span>
+      <span>Decisiones de arquitectura</span>
+      <span class="desc">— cerrar cada decisión una a una vía AskUserQuestion antes de escribir <code>design.md</code></span>
+    </div>
+    <div class="phase">
+      <div class="num">Fase 3</div>
+      <div class="name">Proposal + Design</div>
+      <div class="cmd">/opsx:propose</div>
+    </div>
+    <div class="gate-bar">
+      <span class="badge">Gate B</span>
+      <span>Plan de tareas</span>
+      <span class="desc">— bullets de tareas + flag async/sequential + estimación S/M/L, OK del operador antes de tasks.md detallado</span>
+    </div>
+    <div class="phase">
+      <div class="num">Fase 4</div>
+      <div class="name">Tasks.md</div>
+      <div class="cmd">/opsx:propose</div>
+    </div>
+    <div class="gate-bar">
+      <span class="badge">Gate D</span>
+      <span>Comenzar implementación</span>
+      <span class="desc">— confirmar qué subagente, qué batch, async o secuencial. Operador puede pedir manual prereqs primero.</span>
+    </div>
+    <div class="phase">
+      <div class="num">Fase 5</div>
+      <div class="name">Implementar</div>
+      <div class="cmd">/opsx:apply</div>
+    </div>
+    <div class="phase">
+      <div class="num">Fase 6</div>
+      <div class="name">Adversarial review</div>
+      <div class="cmd">subagente</div>
+    </div>
+    <div class="gate-bar">
+      <span class="badge">Gate C</span>
+      <span>Triage de findings</span>
+      <span class="desc">— Blocker/Major auto-in si entran en threat model, Minor/Question default-defer. Operador OK las excepciones.</span>
+    </div>
+    <div class="phase">
+      <div class="num">Fase 7</div>
+      <div class="name">Commit + PR</div>
+      <div class="cmd">/commit</div>
+    </div>
+    <div class="phase">
+      <div class="num">Fase 8</div>
+      <div class="name">Archive + sync + docs</div>
+      <div class="cmd">/opsx:archive</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Por qué A → B → D → C:</strong> los letters son estables (para cross-reference); el orden por fase es A (3), B (4), D (5), C (6). C dispara después de D porque la review es post-implementación.
+  </div>
+</section>
+
+<section id="gates">
+  <h2>2. Los 4 Gates en detalle</h2>
+  <div class="gate-cards">
+
+    <div class="gate-card" id="gate-a">
+      <h3>Gate A — Decisiones de arquitectura</h3>
+      <div class="fires">Fires: después de Fase 1, antes de escribir <code>design.md</code></div>
+      <div class="role role-claude">Claude hace</div>
+      <ul>
+        <li>Lista cada decisión arquitectura-shaping (storage, scheduler, encryption, alerting, host, modelo de persistencia, security boundary…)</li>
+        <li>Para cada decisión, presenta 2-4 opciones con trade-offs vía <code>AskUserQuestion</code> — <strong>una a la vez</strong>, nunca bundling de 12</li>
+        <li>Registra cada decisión cerrada en <code>design.md</code> §Decisions con alternativas rechazadas + por qué</li>
+      </ul>
+      <div class="role role-operator">Operador hace</div>
+      <ul>
+        <li>Responde. Si quiere diferir, dice <code>[DEFERRED]</code> explícito.</li>
+      </ul>
+      <div class="pass">
+        <strong>Pasa cuando:</strong> cero decisiones abiertas. Nada que Claude quiera asumir queda sin aprobar.
+      </div>
+    </div>
+
+    <div class="gate-card" id="gate-b">
+      <h3>Gate B — Plan de tareas</h3>
+      <div class="fires">Fires: después de <code>design.md</code>, antes de <code>tasks.md</code></div>
+      <div class="role role-claude">Claude hace</div>
+      <ul>
+        <li>Bulleted plan: N top-level tasks, una frase cada uno, en orden de implementación</li>
+        <li>Marca cuáles son independientes (paralelizables) vs secuenciales</li>
+        <li>Marca cuáles son operator-manual vs agent-implementable</li>
+        <li>Estimación relativa S/M/L (no horas)</li>
+      </ul>
+      <div class="role role-operator">Operador hace</div>
+      <ul>
+        <li>Trim / reorder / split / merge. Cortar scope aquí cuesta 10× menos que en Gate C.</li>
+      </ul>
+      <div class="pass">
+        <strong>Pasa cuando:</strong> operador dice "go" o "go con estos edits".
+      </div>
+    </div>
+
+    <div class="gate-card" id="gate-d">
+      <h3>Gate D — Comenzar implementación</h3>
+      <div class="fires">Fires: entre <code>tasks.md</code> completo y el primer spawn de <code>backend-developer</code></div>
+      <div class="role role-claude">Claude hace</div>
+      <ul>
+        <li>Confirma: "Voy a spawn <code>backend-developer</code> en Sonnet 4.6 para tasks X.Y → X.Z. Async o secuencial?"</li>
+        <li>Nombra cada subagente que va a spawn y el rango de tasks</li>
+        <li>Surfaces los manual prereqs del operador (ej: "task 1.2 — tienes que correr <code>age-keygen</code> antes")</li>
+      </ul>
+      <div class="role role-operator">Operador hace</div>
+      <ul>
+        <li>Confirma, redirecciona (otro subagente, otro modelo), o pide splittear el apply en batches</li>
+      </ul>
+      <div class="pass">
+        <strong>Pasa cuando:</strong> operador dice "go".
+      </div>
+    </div>
+
+    <div class="gate-card" id="gate-c">
+      <h3>Gate C — Triage findings adversarial</h3>
+      <div class="fires">Fires: después del reporte del adversarial-reviewer, antes de incorporar findings</div>
+      <div class="role role-claude">Claude hace</div>
+      <ul>
+        <li>Lee el threat model de <code>proposal.md</code></li>
+        <li>Auto-clasifica cada finding contra severidad + threat model</li>
+        <li>Presenta solo las excepciones (Minor/Question que sugiere aceptar, Major fuera de threat model que sugiere rechazar)</li>
+      </ul>
+      <div class="role role-operator">Operador hace</div>
+      <ul>
+        <li>Aprueba las excepciones. Confía los defaults.</li>
+      </ul>
+      <div class="pass">
+        <strong>Pasa cuando:</strong> cada finding tiene disposition (<code>incorporated</code> / <code>deferred</code> / <code>rejected (out of threat model)</code>) y el operador revisó la lista de excepciones.
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="findings">
+  <h2>3. Severidad de findings — política de triage</h2>
+  <table>
+    <thead>
+      <tr><th>Severidad</th><th>Default action</th><th>Operador OK necesario?</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="sev-blocker">Blocker</span></td>
+        <td>Incorporar en este change</td>
+        <td>No (solo notificación)</td>
+      </tr>
+      <tr>
+        <td><span class="sev-major">Major</span></td>
+        <td>Incorporar <em>salvo</em> que el threat model lo excluya</td>
+        <td>Sí, solo si rechaza</td>
+      </tr>
+      <tr>
+        <td><span class="sev-minor">Minor</span></td>
+        <td>Diferir a follow-up change</td>
+        <td>Sí, solo si acepta ahora</td>
+      </tr>
+      <tr>
+        <td><span class="sev-question">Question</span></td>
+        <td>Responder en comentario, sin code change</td>
+        <td>Sí, solo si acepta como code change</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <strong>Threat model gate:</strong> cada <code>proposal.md</code> DEBE declarar un <code>## Threat model</code> nombrando el adversario y qué está <em>fuera de scope</em>. Findings fuera de threat model se auto-rechazan, con razón de una línea en <code>design.md</code> §Rejected findings.
+  </div>
+
+  <h3>Ejemplo aplicado — supabase-backup-policy</h3>
+  <pre>## Threat model (declarada en proposal.md)
+Adversary: opportunistic cloud-storage breach.
+Out of scope: local forensic adversary with physical disk access
+            — therefore `cipher /W`, VSS clear, Tails live-USB findings auto-rejected.</pre>
+</section>
+
+<section id="async">
+  <h2>4. Async / paralelo — cuándo aprovechar subagentes en paralelo</h2>
+  <p style="color: var(--muted); font-size: 13px;">
+    Paralelo ≠ más barato. 3 subagentes 5 min = 3× tokens de 1 subagente 5 min. Paralelo compra <strong>wall-clock cuando estás bloqueado</strong>, no presupuesto. Default: <strong>secuencial</strong>. Opt-in a paralelo en Gate D.
+  </p>
+
+  <div class="async-grid">
+    <div class="async-card">
+      <div class="phase-tag">Fase 2 — Explorar</div>
+      <div class="title">Research fan-out</div>
+      <div class="how">Múltiples Explore subagentes en distintas sub-preguntas. <br><code>Single message → N Agent calls in parallel</code></div>
+    </div>
+
+    <div class="async-card">
+      <div class="phase-tag">Fase 5 — Implementar</div>
+      <div class="title">Tasks independientes</div>
+      <div class="how">Si <code>tasks.md</code> tiene grupos sin overlap (ej: endpoint A vs endpoint B), spawn N <code>backend-developer</code> con <code>isolation: "worktree"</code>. Reconciliar mergeando branches.</div>
+    </div>
+
+    <div class="async-card">
+      <div class="phase-tag">Fase 6 — Adversarial review</div>
+      <div class="title">Background mientras drafteas</div>
+      <div class="how">Spawn <code>adversarial-reviewer</code> con <code>run_in_background: true</code>. Mientras corre: redactar commit message, actualizar Notion, draftear <code>/update-docs</code> deltas.</div>
+    </div>
+
+    <div class="async-card">
+      <div class="phase-tag">Fase 8 — Cierre</div>
+      <div class="title">Sync + docs en paralelo</div>
+      <div class="how"><code>/openspec-sync-specs</code> y <code>/update-docs</code> tocan archivos distintos. Dos Agent calls en paralelo (cuidado con conflictos si el change tocó SPEC.md y specs/).</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Cuándo NO paralelizar:</strong> si quieres ver el trabajo pasar para poder interrumpir, secuencial es mejor — más fácil interjeccionar.
+  </div>
+</section>
+
+<section id="commands">
+  <h2>5. Cheat-sheet de comandos</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Comando</th>
+        <th>Fase</th>
+        <th>Qué hace</th>
+        <th>Output</th>
+        <th>Gate</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>/enrich-us</code></td>
+        <td>1</td>
+        <td>Refina historia fuzzy (Notion o texto) a historia testable</td>
+        <td>Historia refinada (no files)</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><code>/opsx:explore</code></td>
+        <td>2 opt</td>
+        <td>Research mode: pregunta, lee código, sin artefactos</td>
+        <td>Conversación</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><code>/opsx:propose</code></td>
+        <td>3–4</td>
+        <td>Genera proposal + design + specs + tasks para nuevo change</td>
+        <td><code>openspec/changes/&lt;id&gt;/*</code></td>
+        <td><strong style="color: var(--gate)">A</strong> antes design.md, <strong style="color: var(--gate)">B</strong> antes tasks.md</td>
+      </tr>
+      <tr>
+        <td><code>/opsx:apply</code></td>
+        <td>5</td>
+        <td>Implementa tasks; delega a <code>backend-developer</code></td>
+        <td>Código + tests</td>
+        <td><strong style="color: var(--gate)">D</strong> antes primer spawn</td>
+      </tr>
+      <tr>
+        <td><code>adversarial-review</code> / <code>Agent(adversarial-reviewer)</code></td>
+        <td>6</td>
+        <td>Red-team del change antes de merge</td>
+        <td>Findings report (markdown)</td>
+        <td><strong style="color: var(--gate)">C</strong> después del reporte</td>
+      </tr>
+      <tr>
+        <td><code>/commit</code></td>
+        <td>7</td>
+        <td>Commit + PR siguiendo convenciones del repo</td>
+        <td>Git commit + PR URL</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><code>/opsx:archive</code></td>
+        <td>8</td>
+        <td>Mueve change a <code>archive/</code>, marca completo</td>
+        <td>Archive actualizado</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><code>/openspec-sync-specs</code></td>
+        <td>8</td>
+        <td>Merge delta specs a <code>openspec/specs/&lt;capability&gt;/spec.md</code></td>
+        <td>Specs canónicos actualizados</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><code>/update-docs</code></td>
+        <td>8</td>
+        <td>Sync SPEC.md / docs/ / Notion con lo que aterrizó</td>
+        <td>Edits de docs</td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="interrupt">
+  <h2>6. Cuándo interrumpir</h2>
+  <div class="interrupt">
+    <strong>Si Claude no se detiene en un gate, interrúmpelo y dilo.</strong><br><br>
+    Los gates son el contrato. Saltarse uno sin OK del operador es un bug del proceso, no una feature.
+    Frases útiles:
+    <ul>
+      <li>"Espera — antes de design.md, lista las decisiones abiertas." (Gate A)</li>
+      <li>"Antes de tasks.md, muéstrame el plan en bullets." (Gate B)</li>
+      <li>"No spawnees backend-developer todavía — confirma el batch primero." (Gate D)</li>
+      <li>"Findings: dame solo las excepciones a la política default." (Gate C)</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+</div>
+</body>
+</html>
