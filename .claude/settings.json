@@ -3,8 +3,13 @@
   "hooks": {
     "SessionStart": [
       {
-        "type": "command",
-        "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1 2>nul || powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\preflight.ps1"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1 2>/dev/null || powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1"
+          }
+        ]
       }
     ]
   }
