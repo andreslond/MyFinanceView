@@ -1,6 +1,6 @@
 # Frontend Standards — MyFinanceView
 
-> **Status:** placeholder. The frontend is not yet started. This document will be filled when TASK-UI-* tasks become active. Until then, see [SPEC.md §11](../SPEC.md) for the high-level vision.
+> **Status:** placeholder for code conventions. The frontend is not yet started. This document will be filled when TASK-UI-* tasks become active. The **visual language is already defined** — see [design/](design/). Until then, see [SPEC.md §11](../SPEC.md) for the high-level vision.
 
 ---
 
@@ -10,7 +10,7 @@
 - **State:** React Query for server state, Zustand for UI state.
 - **Auth:** Supabase JS client for login/refresh; JWT forwarded to backend on every call.
 - **Routing:** React Router.
-- **UI design:** Mockups produced separately in Claude Design; this doc covers code conventions, not visual design.
+- **UI design:** Canonical visual language lives in [design/design-system.md](design/design-system.md); screens, flows, and dev handoff in [design/ui-handoff.md](design/ui-handoff.md). Original bundle preserved immutably under [design/raw/](design/raw/). This doc covers code conventions only.
 
 ## 2. Principles (carry over from base-standards)
 
@@ -30,8 +30,11 @@
 ## 4. References
 
 - [base-standards.md](base-standards.md) for cross-cutting principles.
+- [design/design-system.md](design/design-system.md) — canonical tokens, type, colors, components.
+- [design/ui-handoff.md](design/ui-handoff.md) — screens, flows, interactions.
+- [design/raw/](design/raw/) — original design bundle, immutable.
 - Backlog: Notion épica "Épica 3 — App / UI".
-- Backend contract: [backend-standards.md](backend-standards.md) and the eventual `docs/api-spec.yml`.
+- Backend contract: [backend-standards.md](backend-standards.md) and [api-spec.yml](api-spec.yml).
 
 ---
 

@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="ds-card.css">
+<style>
+  .stack { display: flex; flex-direction: column; gap: 18px; }
+  .specimen { display: grid; grid-template-columns: 110px 1fr; gap: 24px; align-items: baseline; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .specimen:last-child { border-bottom: none; padding-bottom: 0; }
+  .specimen .meta { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px; color: var(--text-2); line-height: 1.45; }
+  .specimen .meta b { color: var(--text); font-weight: 600; display: block; font-size: 11px; }
+  .sample { color: var(--text); }
+  .display { font-size: 44px; font-weight: 600; letter-spacing: -1.6px; line-height: 1; font-feature-settings: 'tnum' 1; }
+  .h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.6px; line-height: 1.1; }
+  .h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.4px; }
+  .h3 { font-size: 14px; font-weight: 600; letter-spacing: -0.2px; }
+  .caption { font-size: 11px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: var(--text-3); }
+</style>
+</head>
+<body><div class="dsc">
+  <h2 class="dsc-h">Display + headings</h2>
+  <p class="dsc-sub">Geist Sans across the type scale. Tight tracking for large sizes; uppercase eyebrows for section labels.</p>
+  <div class="stack">
+    <div class="specimen">
+      <div class="meta"><b>Display</b>44 / 600<br>−1.6 tracking</div>
+      <div class="sample display">$8,322.<span style="font-size:22px;color:var(--text-2)">89</span></div>
+    </div>
+    <div class="specimen">
+      <div class="meta"><b>Display Tx</b>38 / 600<br>−1.2 tracking</div>
+      <div class="sample display" style="font-size:38px;letter-spacing:-1.2px">−$132.<span style="font-size:18px;color:var(--text-2)">00</span></div>
+    </div>
+    <div class="specimen">
+      <div class="meta"><b>H1</b>22 / 700<br>−0.6 tracking</div>
+      <div class="sample h1">Where did your money go?</div>
+    </div>
+    <div class="specimen">
+      <div class="meta"><b>H2</b>18 / 600<br>−0.4 tracking</div>
+      <div class="sample h2">Saving toward 4 goals</div>
+    </div>
+    <div class="specimen">
+      <div class="meta"><b>H3</b>14 / 600<br>−0.2 tracking</div>
+      <div class="sample h3">Recent activity</div>
+    </div>
+    <div class="specimen">
+      <div class="meta"><b>Eyebrow</b>11 / 600<br>0.6 tracking · upper</div>
+      <div class="sample caption">Total balance</div>
+    </div>
+  </div>
+</div></body></html>

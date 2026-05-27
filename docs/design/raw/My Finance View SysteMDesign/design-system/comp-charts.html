@@ -1,0 +1,70 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="ds-card.css">
+<style>
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 18px; align-items: center; }
+  .demo { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .demo b { font-size: 11px; font-weight: 600; }
+  .demo span { font-family: 'Geist Mono'; font-size: 10px; color: var(--text-2); text-align: center; }
+  .donut-wrap { position: relative; width: 110px; height: 110px; }
+  .donut-wrap .ctr { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .donut-wrap .ctr small { font-size: 9px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-3); font-weight: 600; }
+  .donut-wrap .ctr b { font-size: 18px; letter-spacing: -0.4px; font-feature-settings: 'tnum' 1; }
+  .ring-wrap { width: 64px; height: 64px; position: relative; }
+  .ring-wrap b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+  .bars { width: 110px; }
+  .bar { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+  .bar .dot { width: 5px; height: 5px; border-radius: 2px; flex-shrink: 0; }
+  .bar .lbl { font-size: 10px; font-weight: 500; flex: 0 0 50px; }
+  .bar .track { flex: 1; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 2px; }
+</style>
+</head>
+<body><div class="dsc">
+  <h2 class="dsc-h">Charts</h2>
+  <p class="dsc-sub">Pure SVG. Donut for category share, ring for single-goal progress, sparkline for 30-day spend, mini bars for budget lists.</p>
+  <div class="grid">
+    <div class="demo">
+      <div class="donut-wrap">
+        <svg viewBox="0 0 110 110" width="110" height="110">
+          <circle cx="55" cy="55" r="44" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="20"/>
+          <circle cx="55" cy="55" r="44" fill="none" stroke="#7C5CFF" stroke-width="20" stroke-dasharray="100 276" transform="rotate(-90 55 55)"/>
+          <circle cx="55" cy="55" r="44" fill="none" stroke="#22D3EE" stroke-width="20" stroke-dasharray="64 276" stroke-dashoffset="-100" transform="rotate(-90 55 55)"/>
+          <circle cx="55" cy="55" r="44" fill="none" stroke="#FF9EA0" stroke-width="20" stroke-dasharray="42 276" stroke-dashoffset="-164" transform="rotate(-90 55 55)"/>
+          <circle cx="55" cy="55" r="44" fill="none" stroke="#F4B86A" stroke-width="20" stroke-dasharray="20 276" stroke-dashoffset="-206" transform="rotate(-90 55 55)"/>
+        </svg>
+        <div class="ctr"><small>Spent</small><b>$2.5k</b></div>
+      </div>
+      <b>MFVDonut</b><span>multi-segment · center label/value</span>
+    </div>
+
+    <div class="demo">
+      <div class="ring-wrap">
+        <svg viewBox="0 0 64 64" width="64" height="64">
+          <circle cx="32" cy="32" r="29" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="6"/>
+          <circle cx="32" cy="32" r="29" fill="none" stroke="#7C5CFF" stroke-width="6" stroke-dasharray="116 182" stroke-linecap="round" transform="rotate(-90 32 32)"/>
+        </svg>
+        <b>64%</b>
+      </div>
+      <b>MFVRing</b><span>single arc · centered %</span>
+    </div>
+
+    <div class="demo">
+      <svg width="140" height="50" viewBox="0 0 140 50" preserveAspectRatio="none">
+        <path d="M0 38 L10 22 L20 30 L30 18 L40 28 L50 12 L60 26 L70 14 L80 8 L90 22 L100 16 L110 28 L120 18 L130 24 L140 6" fill="none" stroke="#7C5CFF" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M0 38 L10 22 L20 30 L30 18 L40 28 L50 12 L60 26 L70 14 L80 8 L90 22 L100 16 L110 28 L120 18 L130 24 L140 6 L140 50 L0 50 Z" fill="#7C5CFF" opacity="0.12"/>
+      </svg>
+      <b>MFVSparkline</b><span>line + 12% area fill</span>
+    </div>
+
+    <div class="demo">
+      <div class="bars">
+        <div class="bar"><div class="dot" style="background:#7C5CFF"></div><span class="lbl">Subs</span><div class="track"><div class="fill" style="width:66%;background:#7C5CFF"></div></div></div>
+        <div class="bar"><div class="dot" style="background:#22D3EE"></div><span class="lbl">Food</span><div class="track"><div class="fill" style="width:68%;background:#22D3EE"></div></div></div>
+        <div class="bar"><div class="dot" style="background:#F4B86A"></div><span class="lbl">Transp</span><div class="track"><div class="fill" style="width:49%;background:#F4B86A"></div></div></div>
+        <div class="bar"><div class="dot" style="background:#FF9EA0"></div><span class="lbl">Shop</span><div class="track"><div class="fill" style="width:71%;background:#FF9EA0"></div></div></div>
+        <div class="bar"><div class="dot" style="background:#8B95B2"></div><span class="lbl">Bills</span><div class="track"><div class="fill" style="width:95%;background:#8B95B2"></div></div></div>
+      </div>
+      <b>MFVBar list</b><span>dense category breakdown</span>
+    </div>
+  </div>
+</div></body></html>

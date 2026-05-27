@@ -10,12 +10,18 @@
 |---|---|---|---|
 | **North star** | `SPEC.md` | Vision, stack, key decisions | Architectural decision changes; stack changes |
 | **Standards** | `docs/*.md` | Detailed *how* per concern | When a convention is added/refined |
+| **Design** | `docs/design/` | Visual language, screens, dev handoff | When the design system or UI handoff evolves |
 | **Plans** | `plans/*.md` | Per-feature technical plan | When an in-flight feature reaches a milestone |
 | **Backlog** | [Notion page](https://www.notion.so/35d8c9b709f081c08d62f7257ce3db57) | Épicas, tareas, DoD | Continuously |
 | **Per-change artifacts** | `openspec/changes/<id>/` | Proposal, design, specs, tasks | Per `/opsx:propose` invocation |
 | **Capability specs** | `openspec/specs/<capability>/` | Canonical capability requirements | After `/opsx:archive` merges deltas |
 | **Memory** | `~/.claude/projects/{slug}/memory/` | AI session-persistent facts | When decisions are made worth remembering |
 | **Archive** | `archive/*` | Historical docs (OBSOLETE banner) | Only to update the banner |
+
+The Design surface has three sub-layers:
+- `docs/design/design-system.md` — curated canonical reference for tokens, type, color, components.
+- `docs/design/ui-handoff.md` — curated canonical reference for screens, flows, interactions.
+- `docs/design/raw/` — original design bundle from the designer. **Immutable** — never edit; re-import on new handoffs. Curated docs are derived from these.
 
 ## 2. Priority When Sources Conflict
 
@@ -34,6 +40,9 @@ If you can't reconcile a conflict locally, flag it to the human and pick the hig
 | How do I run local Postgres? | `docs/development-guide.md` |
 | What does the `savings_goals` table look like? | `docs/data-model.md` (canonical schema) |
 | Why are we adding savings goals? | `plans/savings-goals-plan.md` (feature plan) |
+| What hex is the "purchase shopping" category color? | `docs/design/design-system.md` |
+| What does the Email-Sync flow look like? | `docs/design/ui-handoff.md` |
+| What's the exact `tokens.css` from the designer? | `docs/design/raw/.../tokens.css` |
 | What's the DoD for TASK-SG-BE-04? | Notion (tarjeta) |
 | Step-by-step changes for "Add GET /savings-goals"? | `openspec/changes/add-get-savings-goals/` |
 | User's role preferences | Memory (`user_collaboration.md`) |

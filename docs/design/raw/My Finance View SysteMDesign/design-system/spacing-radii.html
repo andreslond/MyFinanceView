@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="ds-card.css">
+<style>
+  .stage { display: grid; grid-template-columns: auto 1fr; gap: 28px; align-items: flex-start; }
+  .radii { display: flex; flex-direction: column; gap: 10px; }
+  .radii .row { gap: 14px; }
+  .radii .square { background: var(--surface); border: 1px solid var(--border); }
+  .radii span { font-family: 'Geist Mono'; font-size: 11px; color: var(--text-2); }
+  .scale { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+  .scale .bar { background: var(--c-purple); height: 12px; border-radius: 2px; }
+  .scale .label { font-family: 'Geist Mono'; font-size: 11px; color: var(--text-2); white-space: nowrap; }
+</style>
+</head>
+<body><div class="dsc">
+  <h2 class="dsc-h">Radii + spacing scale</h2>
+  <p class="dsc-sub">Generous corner rounding (22px is the default card radius). Spacing is freeform on a 2px grid; the values below are the ones in actual use.</p>
+  <div class="stage">
+    <div>
+      <div class="eyebrow">Radii</div>
+      <div class="radii">
+        <div class="row"><div class="square" style="width:36px;height:36px;border-radius:7px"></div><span>7 · step chips</span></div>
+        <div class="row"><div class="square" style="width:36px;height:36px;border-radius:11px"></div><span>11 · category glyph</span></div>
+        <div class="row"><div class="square" style="width:36px;height:36px;border-radius:12px"></div><span>12 · icon button</span></div>
+        <div class="row"><div class="square" style="width:36px;height:36px;border-radius:14px"></div><span>14 · quick action</span></div>
+        <div class="row"><div class="square" style="width:36px;height:36px;border-radius:18px"></div><span>18 · insight card</span></div>
+        <div class="row"><div class="square" style="width:36px;height:36px;border-radius:22px"></div><span>22 · primary card</span></div>
+        <div class="row"><div class="square" style="width:36px;height:36px;border-radius:26px"></div><span>26 · sheet</span></div>
+        <div class="row"><div class="square" style="width:36px;height:36px;border-radius:999px"></div><span>999 · pill</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="eyebrow">Spacing</div>
+      <div class="scale">
+        <div class="bar" style="width:2px"></div><div class="label">2 · hairline gap</div>
+        <div class="bar" style="width:4px"></div><div class="label">4 · chip inner gap</div>
+        <div class="bar" style="width:6px"></div><div class="label">6 · row gap</div>
+        <div class="bar" style="width:8px"></div><div class="label">8 · stack gap</div>
+        <div class="bar" style="width:10px"></div><div class="label">10 · tx row gap</div>
+        <div class="bar" style="width:12px"></div><div class="label">12 · card padding y</div>
+        <div class="bar" style="width:14px"></div><div class="label">14 · card padding</div>
+        <div class="bar" style="width:16px"></div><div class="label">16 · screen padding (Home C)</div>
+        <div class="bar" style="width:18px"></div><div class="label">18 · screen padding (Home A/B)</div>
+        <div class="bar" style="width:22px"></div><div class="label">22 · section gap</div>
+        <div class="bar" style="width:28px"></div><div class="label">28 · hero margin</div>
+      </div>
+    </div>
+  </div>
+</div></body></html>

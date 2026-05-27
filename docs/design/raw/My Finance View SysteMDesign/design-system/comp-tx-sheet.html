@@ -1,0 +1,84 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="ds-card.css">
+<style>
+  .stage { display: flex; gap: 24px; align-items: flex-start; }
+  .sheet { width: 300px; padding: 12px 18px 22px; background: var(--surface); border: 1px solid var(--border); border-radius: 26px; }
+  .handle { width: 36px; height: 4px; border-radius: 4px; background: var(--border-2); margin: 0 auto 14px; }
+  .hdr { display: flex; align-items: center; gap: 12px; }
+  .glyph { width: 40px; height: 40px; border-radius: 12px; background: #FF9EA0; color: #0B0B0F; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .hdr .name { font-size: 16px; font-weight: 600; letter-spacing: -0.2px; }
+  .hdr .cat { font-size: 12px; color: var(--text-2); }
+  .hdr .close { width: 28px; height: 28px; border-radius: 14px; background: var(--chip-bg); color: var(--text-2); display: flex; align-items: center; justify-content: center; }
+  .amount { font-feature-settings: 'tnum' 1; font-size: 38px; font-weight: 600; margin-top: 18px; letter-spacing: -1.2px; }
+  .amount .cents { font-size: 22px; color: var(--text-2); }
+  .meta-row { display: flex; gap: 6px; margin-top: 4px; font-size: 12px; color: var(--text-2); }
+  .group { margin-top: 18px; display: flex; flex-direction: column; gap: 1px; border-radius: 14px; overflow: hidden; background: var(--surface-2); }
+  .group div { display: flex; justify-content: space-between; gap: 12px; padding: 11px 14px; }
+  .group div span { font-size: 12px; color: var(--text-2); }
+  .group div b { font-size: 13px; font-weight: 500; }
+  .worth { margin-top: 14px; padding: 14px 16px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  .worth-text b { font-size: 13px; font-weight: 600; display: block; }
+  .worth-text span { font-size: 11px; color: var(--text-2); margin-top: 2px; display: block; }
+  .worth .vote { width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+  .worth .vote.up { background: rgba(52,224,161,0.15); color: var(--c-positive); }
+  .worth .vote.down { background: var(--chip-bg); color: var(--text-2); }
+  .ctas { display: flex; gap: 8px; margin-top: 14px; }
+  .ctas button { flex: 1; height: 46px; border-radius: 14px; font-size: 13px; font-weight: 500; }
+  .ctas button.ghost { background: var(--chip-bg); color: var(--text); border: 1px solid var(--border); }
+  .ctas button.solid { background: var(--text); color: var(--bg); border: none; font-weight: 600; }
+  .notes { flex: 1; }
+  .notes h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+  .notes ul { margin: 0; padding-left: 16px; font-size: 12px; color: var(--text-2); line-height: 1.6; }
+  .notes ul b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body><div class="dsc">
+  <h2 class="dsc-h">Transaction sheet</h2>
+  <p class="dsc-sub">Bottom-sheet detail view. Triggered by tapping any TxRow. The "Worth it?" toggle is the introspective beat — only on outflows.</p>
+  <div class="stage">
+    <div class="sheet">
+      <div class="handle"></div>
+      <div class="hdr">
+        <div class="glyph"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l-1 13H7L6 7z"/><path d="M9 7a3 3 0 1 1 6 0"/></svg></div>
+        <div style="flex:1">
+          <div class="name">Amazon</div>
+          <div class="cat">Shopping</div>
+        </div>
+        <div class="close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
+      </div>
+      <div class="amount">−$132<span class="cents">.00</span></div>
+      <div class="meta-row">
+        <span>May 24 · 14:22</span><span>·</span>
+        <span style="display:inline-flex;align-items:center;gap:4px">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          Synced from email
+        </span>
+      </div>
+      <div class="group">
+        <div><span>From</span><b>noreply@amazon.com</b></div>
+        <div><span>Note</span><b>Mechanical keyboard</b></div>
+        <div><span>Account</span><b>Visa ····4082</b></div>
+      </div>
+      <div class="worth">
+        <div class="worth-text" style="flex:1"><b>Worth it?</b><span>Mark to review later</span></div>
+        <div class="vote up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-6 0v4H4v11h12a2 2 0 0 0 2-1.7l1.5-7A2 2 0 0 0 17.5 9H14z"/></svg></div>
+        <div class="vote down"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 0 0 6 0v-4h4V4H8a2 2 0 0 0-2 1.7L4.5 13A2 2 0 0 0 6.5 15H10z"/></svg></div>
+      </div>
+      <div class="ctas">
+        <button class="ghost">Recategorize</button>
+        <button class="solid">View receipt</button>
+      </div>
+    </div>
+    <div class="notes">
+      <h3>Anatomy</h3>
+      <ul>
+        <li><b>Sheet</b> bottom-anchored, r26 top, slides in via mfv-sheet-in (350ms ease-out)</li>
+        <li><b>Handle</b> 36×4, border-2 colored</li>
+        <li><b>Hero amount</b> 38 / 600 / −1.2 with cents inset at 22, text-2</li>
+        <li><b>Meta group</b> surface-2 rounded box, 1px row separation via gap</li>
+        <li><b>Worth it?</b> only renders on outflows; tinted bg + colored border when active</li>
+        <li><b>Backdrop</b> rgba(0,0,0,0.5), fade-in 200ms</li>
+      </ul>
+    </div>
+  </div>
+</div></body></html>

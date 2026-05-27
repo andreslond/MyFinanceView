@@ -1,0 +1,60 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="ds-card.css">
+<style>
+  .hero { display: flex; gap: 28px; align-items: flex-start; }
+  .hero .left { flex: 1; }
+  .hero h1 { font-size: 36px; font-weight: 700; letter-spacing: -1.2px; margin: 0 0 8px; line-height: 1.05; }
+  .hero p { font-size: 13px; color: var(--text-2); line-height: 1.5; margin: 0 0 16px; max-width: 38ch; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tags span { padding: 4px 10px; border-radius: 999px; background: var(--chip-bg); font-size: 11px; font-weight: 500; color: var(--text); }
+  .accentbar { display: flex; gap: 4px; margin-top: 14px; }
+  .accentbar div { height: 36px; flex: 1; border-radius: 10px; }
+  .right { flex: 0 0 180px; }
+  .right .ring { width: 180px; height: 180px; position: relative; }
+  .right .ring svg { width: 100%; height: 100%; }
+  .right .ring .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .right .ring .center b { font-size: 28px; font-weight: 700; letter-spacing: -0.8px; }
+  .right .ring .center span { font-size: 10px; letter-spacing: 0.6px; color: var(--text-3); text-transform: uppercase; font-weight: 600; }
+</style>
+</head>
+<body><div class="dsc">
+  <div class="hero">
+    <div class="left">
+      <div class="eyebrow">My Finance View · Design System</div>
+      <h1>Clarity over fanfare.</h1>
+      <p>A real-time finance app that answers four questions: where my money goes, am I on pace, what might I regret, what's next. Email-sourced. Type-and-data first.</p>
+      <div class="tags">
+        <span>Mobile · iOS first</span>
+        <span>Dark + Light</span>
+        <span>Geist + Geist Mono</span>
+        <span>Purple · Cyan</span>
+      </div>
+      <div class="accentbar">
+        <div style="background:#7C5CFF"></div>
+        <div style="background:#22D3EE"></div>
+        <div style="background:#34E0A1"></div>
+        <div style="background:#FF6B6B"></div>
+        <div style="background:#F4B86A"></div>
+        <div style="background:#FF9EA0"></div>
+        <div style="background:#8B95B2"></div>
+        <div style="background:#6FE39A"></div>
+      </div>
+    </div>
+    <div class="right">
+      <div class="ring">
+        <svg viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8"/>
+          <circle cx="50" cy="50" r="44" fill="none" stroke="#7C5CFF" stroke-width="8"
+            stroke-dasharray="120 276" stroke-linecap="round" transform="rotate(-90 50 50)"/>
+          <circle cx="50" cy="50" r="32" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
+          <circle cx="50" cy="50" r="32" fill="none" stroke="#22D3EE" stroke-width="6"
+            stroke-dasharray="100 201" stroke-linecap="round" transform="rotate(-90 50 50)"/>
+        </svg>
+        <div class="center">
+          <span>Net</span>
+          <b>+2.4%</b>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></body></html>

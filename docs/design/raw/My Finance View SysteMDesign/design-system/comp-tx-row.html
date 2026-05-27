@@ -1,0 +1,61 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="ds-card.css">
+<style>
+  .tx { display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+  .glyph { width: 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center; color: #0B0B0F; flex-shrink: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,0.18); }
+  .glyph svg { width: 19px; height: 19px; }
+  .mid { flex: 1; min-width: 0; }
+  .merchant { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
+  .badge { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 4px; background: var(--c-cyan-soft); color: var(--c-cyan); }
+  .meta { font-size: 11px; color: var(--text-2); margin-top: 1px; }
+  .amount { font-family: Geist; font-feature-settings: 'tnum' 1; letter-spacing: -0.3px; font-size: 15px; font-weight: 600; text-align: right; flex-shrink: 0; }
+  .amount.pos { color: var(--c-positive); }
+  .amount .cents { font-family: 'Geist Mono'; font-size: 11px; color: var(--text-2); }
+  .compact .glyph { width: 34px; height: 34px; border-radius: 10px; }
+  .anatomy { margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-family: 'Geist Mono'; font-size: 10px; color: var(--text-2); line-height: 1.5; }
+  .anatomy b { color: var(--text); font-weight: 600; display: block; }
+</style>
+</head>
+<body><div class="dsc">
+  <h2 class="dsc-h">TxRow · transaction row</h2>
+  <p class="dsc-sub">The single most-repeated component in the app. Tap → opens the bottom sheet. Cyan mail badge marks email-sourced rows.</p>
+
+  <div class="tx">
+    <div class="row">
+      <div class="glyph" style="background:#22D3EE"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v9a3 3 0 0 0 3 3v8"/><path d="M12 2v9a3 3 0 0 1-3 3"/><path d="M18 2c-1.7 0-3 1.3-3 3v6c0 1.1.9 2 2 2h1v9"/></svg></div>
+      <div class="mid">
+        <div class="merchant">Whole Foods <span class="badge"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span></div>
+        <div class="meta">Today · 11:02</div>
+      </div>
+      <div class="amount">−$84<span class="cents">.32</span></div>
+    </div>
+    <div class="row">
+      <div class="glyph" style="background:#34E0A1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></div>
+      <div class="mid">
+        <div class="merchant">Acme Inc · Salary</div>
+        <div class="meta">Yesterday · 08:00</div>
+      </div>
+      <div class="amount pos">+$4,200<span class="cents">.00</span></div>
+    </div>
+    <div class="row">
+      <div class="glyph" style="background:#FF9EA0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l-1 13H7L6 7z"/><path d="M9 7a3 3 0 1 1 6 0"/></svg></div>
+      <div class="mid">
+        <div class="merchant">Amazon <span class="badge"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span></div>
+        <div class="meta">May 24 · 14:22 · flagged</div>
+      </div>
+      <div class="amount">−$132<span class="cents">.00</span></div>
+    </div>
+    <div class="row compact">
+      <div class="glyph" style="background:#7C5CFF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></div>
+      <div class="mid"><div class="merchant" style="font-size:13px">Spotify Premium</div><div class="meta">Today · 09:14</div></div>
+      <div class="amount" style="font-size:14px">−$12<span class="cents">.99</span></div>
+    </div>
+  </div>
+
+  <div class="anatomy">
+    <div><b>Category glyph</b>38×38 (compact 34×34), radius 11, inset highlight</div>
+    <div><b>Merchant + meta</b>14/600 + 11/400 stack; mail badge inline</div>
+    <div><b>Amount</b>15/600 Geist, cents in Mono 11 at text-2; income in positive</div>
+  </div>
+</div></body></html>
