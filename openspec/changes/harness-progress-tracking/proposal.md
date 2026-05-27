@@ -48,4 +48,26 @@ The pattern is borrowed from `betta-tech/ejemplo-harness-subagentes` (init.sh + 
   - **Cross-session race.** Two sessions touching the same change concurrently produce conflicting writes to `progress.md`. Mitigation: git's merge-conflict surface is acceptable for v1 — single-operator project, two parallel sessions on one change is itself a process smell.
 - **Threat model:** this change is process tooling, not security-sensitive. The artefacts read-only the local repo and (optionally) the R2 backup-status object. They do NOT write to Supabase, the application database, or any production system. No adversary model is needed; out-of-scope-adversary findings during adversarial review (e.g. "preflight could be spoofed by a malicious local script") are auto-rejected per the same Gate C policy that governs every change.
 - **Notion:** new TASK-HARNESS-PROGRESS entry on the project page; cross-link to the modified workflow.md sections.
-- **Unblocks:** future OpenSpec changes will start with a green preflight check and a populated `progress.md`, materially reducing "wait, where was I?" friction. Specifically unblocks the eventual `harness-checkpoints` follow-up (out of scope here) which depends on having a working SessionStart hook to layer additional reports on top.
+- **Unblocks:** future OpenSpec changes will start with a green preflight check (agent-invoked per CLAUDE.md directive) and a populated `progress.md`, materially reducing "wait, where was I?" friction. Specifically unblocks the eventual `harness-checkpoints` follow-up (out of scope here) which depends on having a working preflight script and a stable per-change progress file pattern to layer additional invariants on top.
+
+---
+
+## Closing note — 2026-05-27 (archive-time confirmation)
+
+This change is **live** as of the archive commit. Concretely:
+
+- `scripts/preflight.ps1` is committed and self-tested (4 OK / 2 WARN / 1 SKIP / 0 FAIL on the operator's PS 5.1).
+- `openspec/templates/progress-template.md` is committed; both active changes (`harness-progress-tracking`, `supabase-backup-policy`) carry a populated `progress.md` at archive time.
+- The canonical preflight directive lives in `CLAUDE.md ## Workflow` and is mirrored into `.claude/agents/backend-developer.md` item 7.
+- `.claude/agents/adversarial-reviewer.md` checks for stale `progress.md` AND missing-preflight evidence as Minor `process-tooling` findings.
+- `docs/workflow.md §0 Session start` describes the agent-invoked pattern.
+- `docs/base-standards.md §3` cross-links to the harness expectations.
+- `.claude/commands/opsx/propose.md` + `.claude/skills/openspec-propose/SKILL.md` seed `progress.md` from the template at change-creation time; a manual `Copy-Item` fallback is documented in `docs/workflow.md` Phase B.
+
+**There is no SessionStart hook.** A previous draft of this change installed one and was rolled back after operator dogfooding revealed three problems (every-session overhead, operator-invisible output, cross-shell escape bugs). The current shape — agent-invoked via CLAUDE.md directive — matches `betta-tech/ejemplo-harness-subagentes` (`init.sh` from `AGENTS.md`). The rollback rationale is preserved verbatim in `design.md` Decision 5 v2 for future readers.
+
+**Deferred operator actions** (carried into next session via `TOMORROW.md` at the repo root):
+
+- Task 2.11 — re-run preflight in `pwsh` 7 after `winget install --id Microsoft.PowerShell`
+- Task 3a.5 — natural smoke of the agent-invoked directive on the next real `/opsx:apply` session
+- Task 6.7 — Notion notification + write-up of v1 lessons (and v2 backlog: CHECKPOINTS.md, leader-mode)

@@ -66,6 +66,10 @@ Phases (gates in **bold**):
 
 Skipping a phase OR a gate requires justification in the commit body. Gates without operator OK are a process bug, not a feature — interrupt and call it out.
 
+### Session-start expectations (harness)
+
+Every non-trivial session in this repo MUST run `scripts/preflight.ps1` and report its output before code edits or commits — see the directive in [`CLAUDE.md`](../CLAUDE.md) `## Workflow (per change)` and the long-form description in [`workflow.md §0`](workflow.md). Each active change under `openspec/changes/<id>/` carries a live `progress.md` (YAML) maintained by the `backend-developer` subagent per closed task; `/opsx:apply` reads it to resume across session compactions. There is **no SessionStart hook** — preflight is agent-invoked per the operator's preference; see `openspec/specs/harness-progress-tracking/spec.md` (when archived).
+
 ## 4. Code Quality Bar
 
 ### Money
