@@ -40,10 +40,10 @@
 
 ## 5. Propose-skill template seeding (resolve Open Question 1)
 
-- [ ] 5.1 Inspect the `openspec-propose` skill (`/opsx:propose`) instructions and the `openspec new change` CLI behaviour — determine whether it supports a post-create template copy step or whether the operator must manually `Copy-Item` after each new change
-- [ ] 5.2 If the skill supports a template hook: patch the skill (or its config) to copy `openspec/templates/progress-template.md` into the new change directory as `progress.md` with `last_updated` set to the propose-time UTC timestamp
-- [ ] 5.3 If the skill does NOT support a template hook: document a manual step in `docs/workflow.md` Phase B (propose) — operator runs `Copy-Item openspec/templates/progress-template.md openspec/changes/<id>/progress.md` immediately after `/opsx:propose` returns; AND file a follow-up TODO in `docs/workflow.md` to revisit when the upstream skill supports it
-- [ ] 5.4 Smoke-test the chosen path on a throwaway change (`openspec new change throwaway-test` followed by the copy step, then `openspec validate throwaway-test --strict`, then delete the change directory)
+- [x] 5.1 Inspect the `openspec-propose` skill (`/opsx:propose`) instructions and the `openspec new change` CLI behaviour — determine whether it supports a post-create template copy step or whether the operator must manually `Copy-Item` after each new change
+- [x] 5.2 If the skill supports a template hook: patch the skill (or its config) to copy `openspec/templates/progress-template.md` into the new change directory as `progress.md` with `last_updated` set to the propose-time UTC timestamp
+- [x] 5.3 If the skill does NOT support a template hook: document a manual step in `docs/workflow.md` Phase B (propose) — operator runs `Copy-Item openspec/templates/progress-template.md openspec/changes/<id>/progress.md` immediately after `/opsx:propose` returns; AND file a follow-up TODO in `docs/workflow.md` to revisit when the upstream skill supports it
+- [x] 5.4 Smoke-test the chosen path on a throwaway change (`openspec new change throwaway-test` followed by the copy step, then `openspec validate throwaway-test --strict`, then delete the change directory)
 
 ## 6. Validation, dogfooding, and archive
 

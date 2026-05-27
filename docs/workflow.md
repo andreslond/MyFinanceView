@@ -81,6 +81,15 @@ Order of gates is **A → B → D → C** by phase number — D fires before C b
 
 **Pass condition:** zero open decisions remain. Anything Claude wants to assume must either be explicitly approved or marked DEFERRED.
 
+**Manual `progress.md` seeding (if you bypass `/opsx:propose`):** if you run `openspec new change <id>` directly without going through the patched `/opsx:propose` skill (e.g. one-off CLI use), copy the template manually after creation:
+
+```powershell
+Copy-Item openspec/templates/progress-template.md openspec/changes/<id>/progress.md
+# Then edit last_updated to the current UTC timestamp
+```
+
+`/opsx:apply` will auto-create the file from the template if it's missing (see Gate D step 0) and log `[recovered missing progress.md]`, but seeding it at creation time keeps preflight's per-change-artefact check green from the start.
+
 ### Gate B — Task plan (before `tasks.md`)
 
 **Fires:** after `design.md` is written and approved, before `tasks.md` is generated.

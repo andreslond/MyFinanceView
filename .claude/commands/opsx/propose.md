@@ -75,7 +75,19 @@ When ready to implement, run /opsx:apply
       - Use **AskUserQuestion tool** to clarify
       - Then continue with creation
 
-5. **Show final status**
+5. **Seed `progress.md` from the template** (per `harness-progress-tracking` capability spec)
+
+   Copy `openspec/templates/progress-template.md` into the new change directory as `progress.md`, filling `last_updated` with the current ISO-8601 UTC timestamp. The placeholder fields (`current_task: none`, `last_completed: none`, `next_step: "ready for /opsx:apply"`, empty lists) stay as-is for a fresh change.
+
+   ```bash
+   # PowerShell
+   Copy-Item openspec/templates/progress-template.md openspec/changes/<name>/progress.md
+   # Then edit progress.md and replace the last_updated placeholder with the current UTC timestamp
+   ```
+
+   This file is read by `/opsx:apply` at the start of every session so the next session can pick up where the previous one left off. The `backend-developer` subagent rewrites it after every closed task. See `openspec/specs/harness-progress-tracking/spec.md` Requirement "progress-template.md seeds new changes".
+
+6. **Show final status**
    ```bash
    openspec status --change "<name>"
    ```
