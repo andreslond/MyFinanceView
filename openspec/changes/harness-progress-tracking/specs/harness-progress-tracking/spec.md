@@ -12,7 +12,7 @@ Every change directory under `openspec/changes/<id>/` SHALL contain a `progress.
 #### Scenario: Active change missing progress.md
 
 - **WHEN** `/opsx:apply <name>` is invoked and `openspec/changes/<name>/progress.md` does not exist
-- **THEN** `/opsx:apply` SHALL create it from the template before doing any other work and SHALL log a `[recovered missing progress.md]` line to the operator
+- **THEN** the agent running `/opsx:apply` SHOULD create it from the template before doing any other work and SHOULD log a `[recovered missing progress.md]` line to the operator. **Note (adversarial-review Finding #4, 2026-05-27):** there is no `/opsx:apply` command/skill that enforces this at runtime; the behaviour is documented in `docs/workflow.md` Gate D step 0 and depends on agent discipline. A follow-up `harness-checkpoints-v2` change is planned to add a `validate-progress.ps1` helper plus an explicit `/opsx:apply` skill patch that enforces the recovery deterministically.
 
 ### Requirement: progress.md is updated by the backend-developer subagent after every closed task
 
@@ -39,17 +39,17 @@ The `/opsx:apply` workflow phase D ("implementation") SHALL begin every invocati
 
 #### Scenario: progress.md is stale relative to git history
 
-- **WHEN** `/opsx:apply` reads a `progress.md` whose `last_updated` predates the most recent commit on the change branch
-- **THEN** the resuming-from summary explicitly states `WARNING: progress.md last updated <T1> but most recent commit is <T2> by <author>; verify next_step against the latest commit before proceeding`
+- **WHEN** the agent running `/opsx:apply` reads a `progress.md` whose `last_updated` predates the most recent commit on the change branch
+- **THEN** the resuming-from summary SHOULD explicitly state `WARNING: progress.md last updated <T1> but most recent commit is <T2> by <author>; verify next_step against the latest commit before proceeding`. **Note (adversarial-review Finding #5, 2026-05-27):** there is no automated comparison code that produces this string; the check depends on agent discipline (mirrored in `docs/workflow.md` Gate D step 0). A follow-up `harness-checkpoints-v2` change is planned to add a `validate-progress.ps1` helper that automates the comparison. Until then the `adversarial-reviewer` agent's `progress.md` freshness check (added in this change) catches drift at review time as a defense in depth.
 
 ### Requirement: progress.md is archived with the change
 
-When `/opsx:archive <id>` runs, `progress.md` SHALL be moved from `openspec/changes/<id>/` to `openspec/archive/<id>/` alongside `proposal.md`, `design.md`, `tasks.md`, and the change's `specs/` tree. The archived file is read-only thereafter and serves as the historical record of "what was actually done" for post-mortem and audit purposes.
+When `/opsx:archive <id>` runs, `progress.md` SHALL be moved from `openspec/changes/<id>/` to `openspec/changes/archive/<date>-<id>/` (the project's canonical archive path per `docs/workflow.md` Phase 8) alongside `proposal.md`, `design.md`, `tasks.md`, and the change's `specs/` tree. The archived file is read-only thereafter and serves as the historical record of "what was actually done" for post-mortem and audit purposes.
 
 #### Scenario: Change is archived after completion
 
 - **WHEN** `/opsx:archive <id>` runs against a change whose `tasks.md` has all checkboxes ticked
-- **THEN** `openspec/archive/<id>/progress.md` exists with the final state, `openspec/changes/<id>/` no longer exists, and the archived `progress.md` is identical (byte-for-byte) to the version present at archive time
+- **THEN** `openspec/changes/archive/<date>-<id>/progress.md` exists with the final state, `openspec/changes/<id>/` no longer exists, and the archived `progress.md` is identical (byte-for-byte) to the version present at archive time
 
 ### Requirement: progress-template.md seeds new changes
 

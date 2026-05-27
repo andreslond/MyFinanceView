@@ -106,7 +106,7 @@ The preflight report is consumed by the agent (not by a hook, not by CI, not by 
 
 ### Decision 8 — `progress.md` is git-tracked (not gitignored)
 
-The file is committed alongside other change artefacts. Concurrent-session race conditions surface as git merge conflicts, which is fine for a single-operator project. Tracking it also means archived changes carry their final `progress.md` into `openspec/archive/<id>/`, providing the historical "what was actually done" trail.
+The file is committed alongside other change artefacts. Concurrent-session race conditions surface as git merge conflicts, which is fine for a single-operator project. Tracking it also means archived changes carry their final `progress.md` into `openspec/changes/archive/<date>-<id>/` (the canonical archive path per `docs/workflow.md` Phase 8), providing the historical "what was actually done" trail.
 
 **Alternatives considered:**
 - *Gitignore it (session-local)* — defeats the purpose; a fresh clone wouldn't see in-flight progress, and the historical record is lost.

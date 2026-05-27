@@ -1,13 +1,11 @@
-<!--
-  Live progress for openspec/changes/harness-progress-tracking/
-  Schema: openspec/templates/progress-template.md
-  Updated by: backend-developer subagent after every closed task
-              (see .claude/agents/backend-developer.md).
--->
+# Live progress for openspec/changes/harness-progress-tracking/
+# Schema: openspec/templates/progress-template.md
+# Updated by: backend-developer subagent after every closed task
+#             (see .claude/agents/backend-developer.md).
 
-current_task: "6.1"
-last_completed: "3a.4"
-next_step: "operator-action only: 3a.5 (smoke the agent-invoked preflight on next real /opsx:apply session). Then Section 6: openspec validate --strict, adversarial-review subagent (Gate D), archive, sync-specs."
+current_task: "6.5"
+last_completed: "6.4"
+next_step: "run /opsx:archive harness-progress-tracking then /openspec-sync-specs; after archive lands, tick 6.5 and merge to main"
 decisions_pending_design_update:
   - "scripts/preflight.ps1 uses ASCII `--` instead of `—` in line output because Write tool wrote the file UTF-8 no-BOM, and Windows PowerShell 5.1 mis-decodes em-dashes; ASCII keeps the script 5.1-safe per Decision 4."
   - ".claude/settings.json was absent on this worktree, so created from scratch with only the SessionStart hook entry. The `_comment_SessionStart` key documents the hook's purpose inline (Claude Code's settings.json accepts arbitrary unknown keys, so this is non-breaking; design.md Decision 5 only specified the hook command, not the file format)."
@@ -17,5 +15,6 @@ decisions_pending_design_update:
   - "Initial .claude/settings.json had THREE bugs caught by Smoke C dogfooding (none of them caught by the implementer's in-session smokes): (1) wrong hook schema — needs `[{matcher: '', hooks: [{type, command}]}]` envelope, not `[{type, command}]` directly; (2) backslash escape — `scripts\\preflight.ps1` in JSON resolves to `scripts\\preflight.ps1` literal, which Git Bash (the shell Claude Code uses for hooks on Windows) collapses `\\p` to `p` producing `scriptspreflight.ps1`; (3) `2>nul` is cmd-syntax — Git Bash treats `nul` as a filename and creates a stray `nul` file each session. All three fixed in commit <pending>. Smoke C confirmed working via fresh Claude session quoting verbatim preflight context. Worth flagging in adversarial-review category `process-tooling`: implementer-level smoke tests cannot substitute for end-to-end dogfooding on the actual Claude Code runtime."
   - "Smoke B revealed a Minor diagnostic-quality issue in preflight.ps1 task 2.4: the captured stderr tail picks up Java 25 `sun.misc.Unsafe` deprecation warnings (which mvn emits to stderr BEFORE the actual compile error) instead of the actual error line. The [FAIL] tag and exit code are correct; only the human-readable detail is unhelpful. Follow-up polish: replace `tail -n 5` of stderr with `grep -E 'ERROR|error:' | tail -n 5`. Not blocking for v1."
   - "MAJOR DESIGN REVISION 2026-05-27: SessionStart hook (Decision 5 v1) rolled back in favour of agent-invoked preflight via CLAUDE.md directive (Decision 5 v2). Trigger: operator dogfooding revealed (a) every-session overhead (3-8s mvn compile tax on trivial sessions), (b) hook output is Claude-only context invisible to operator in terminal, (c) three cross-shell bugs (matcher schema, Git Bash backslash escapes, cmd-vs-bash redirect). The agent-invoked pattern matches betta-tech/ejemplo-harness-subagentes (init.sh from AGENTS.md). All v1 hook scaffolding (.claude/settings.json with hooks.SessionStart) deleted. Replaced by directive in CLAUDE.md ## Workflow + mirror in backend-developer.md + missing-preflight-evidence finding in adversarial-reviewer.md. Spec, design, proposal, tasks, docs/workflow.md all updated to reflect v2. Section 3 marked ROLLED BACK; new Section 3a (5 tasks) implements v2."
+  - "Adversarial review 2026-05-27 returned FAIL with 2 Blockers + 6 Majors + 6 Minors + 1 Question. Gate C triage applied: #1 archive path mismatch FIXED (spec/design/workflow.md), #2 premature tick of 6.5 FIXED (un-ticked, will tick after archive), #3 HTML comments breaking YAML parsing FIXED (all 3 progress files rewritten with `#` comments; verified parsing via yaml.safe_load), #6 operator-handoff.md v1 narrative FIXED (rewrote §§ 3.3/3.4/settings.json paragraph + quick checklist), #13 backtick-in-quotes bug FIXED. Majors #4 and #5 RESOLVED by downgrading SHALL to SHOULD in spec scenarios + documenting follow-up `harness-checkpoints-v2`. Majors #7 (schema enforcement) and #8 (change does not pass its own new check) accepted as DOCUMENTED CARVE-OUT — the check applies to future changes; this change is the precedent and is exempt per the reviewer's recommended remediation. Minors #9-#15 documented in TOMORROW.md and `harness-checkpoints-v2` backlog. Full report preserved at openspec/changes/harness-progress-tracking/adversarial-review.md and will travel with the archive."
 blockers: []
-last_updated: "2026-05-27T08:30:00Z"
+last_updated: "2026-05-27T09:15:00Z"

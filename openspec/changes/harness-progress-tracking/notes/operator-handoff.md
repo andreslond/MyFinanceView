@@ -93,52 +93,31 @@ The worktree currently HAS both `supabase-backup-policy` and `harness-progress-t
 
 ---
 
-## Tasks 3.3 and 3.4 — SessionStart hook live verification
+## Task 3a.5 — agent-invoked preflight smoke (Decision 5 v2)
 
-These require closing this Claude Code session and opening a fresh one — the implementing subagent cannot do that.
+**ROLLED FROM v1 hook-based smoke (formerly 3.3/3.4) to v2 directive-based smoke.** The SessionStart hook was removed; there is no `.claude/settings.json` in this repo. Preflight is now invoked by the agent following the directive in `CLAUDE.md ## Workflow (per change)`. See `design.md` Decision 5 v2 for the rollback rationale and `proposal.md ## Closing note` for the live state at archive time.
 
-### 3.3 — Confirm preflight output appears in the first turn
+**How to smoke (passive — happens naturally):**
 
-1. After this implementation session ends, the operator opens a new Claude Code session in this repo (or the parent worktree).
-2. Look at the very first system/context block: it should include the preflight output (one line per `[OK]`/`[WARN]`/`[FAIL]`/`[SKIP]` check and the `=== preflight: ... ===` summary line).
-3. If the output is missing: check `.claude/settings.json` (or `settings.example.json`) for the `hooks.SessionStart` entry and confirm `scripts\preflight.ps1` is on disk at the worktree root.
+The next real `/opsx:apply` session in this repo IS the smoke. When the operator types `/opsx:apply <change>`, verify that Claude's first action is:
 
-### 3.4 — Fallback path (`pwsh` absent → `powershell.exe` runs)
-
-Easiest cross-check: the hook command is `pwsh ... 2>nul || powershell.exe ...`. If `pwsh` is not installed AT ALL on this machine, the fallback branch runs every session — the simple existence of preflight output in step 3.3 already proves the fallback works.
-
-To explicitly stress-test the fallback once `pwsh` IS installed:
-
-```powershell
-# 1. Rename pwsh.exe temporarily
-$pwshPath = (Get-Command pwsh).Source
-Rename-Item $pwshPath "$pwshPath.disabled"
-# 2. Open a fresh Claude Code session, confirm preflight output still appears
-# 3. Restore
-Rename-Item "$pwshPath.disabled" $pwshPath
+```
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1
 ```
 
----
+…and that the output appears in the chat (visible to the operator), NOT injected as silent additional context the way the v1 hook did. Tick task 3a.5 in `tasks.md` (or `openspec/changes/archive/<date>-harness-progress-tracking/tasks.md` after archive) after observing the behaviour.
 
-## Notes on `.claude/settings.json` being gitignored
-
-The repo's `.gitignore` blocks `.claude/settings.local.json` (Claude Code local state) but `.claude/settings.json` itself is NOT in `.gitignore`. However, no `.claude/settings.json` was present on this worktree when the implementing subagent ran. The subagent therefore:
-
-- Created `.claude/settings.json` with the SessionStart hook entry (this file IS git-tracked — operator must verify the commit includes it).
-- Also committed `.claude/settings.example.json` as the canonical reference, so any future operator who has gitignored their own `.claude/settings.json` still has a documented template to copy from.
-
-If the operator wants `.claude/settings.json` ITSELF to be gitignored locally (e.g. to layer personal hook entries on top), add `.claude/settings.json` to the local `.git/info/exclude` (not `.gitignore`) and copy `.claude/settings.example.json` into place manually.
+**If the agent skips preflight** for a non-trivial session, the `adversarial-reviewer` agent will flag the omission as a Minor `process-tooling` finding at next review (per `.claude/agents/adversarial-reviewer.md` line 83). Catch yourself or rely on the reviewer.
 
 ---
 
 ## Quick checklist for the operator
 
-- [ ] 2.10 — PS 5.1 smoke test passes locally
-- [ ] 2.11 — PS 7 smoke test passes locally (install `pwsh` first if needed)
-- [ ] 2.12 — Broken-compile mode produces `[FAIL]` and non-zero exit
-- [ ] 2.13 — Missing-rclone mode produces `[SKIP]` and exits based on real failures
-- [ ] 2.14 — Two-active-changes mode produces `[WARN]` and exit 0
-- [ ] 3.3 — Fresh session shows preflight output as first-turn context
-- [ ] 3.4 — Fallback `powershell.exe` path verified (either by `pwsh` being absent already, or by the explicit rename test)
+- [ ] 2.10 — PS 5.1 smoke test passes locally (covered in-session 2026-05-27; operator re-verification optional)
+- [ ] 2.11 — PS 7 smoke test passes locally (DEFERRED — install `pwsh` via `winget install --id Microsoft.PowerShell` first; see TOMORROW.md)
+- [x] 2.12 — Broken-compile mode produces `[FAIL]` and non-zero exit (verified in-session 2026-05-27)
+- [x] 2.13 — Missing-rclone mode produces `[SKIP]` and exits based on real failures (vacuously satisfied: rclone not installed; observed in 2.10 smoke)
+- [x] 2.14 — Two-active-changes mode produces `[WARN]` and exit 0 (vacuously satisfied: two changes active right now; observed in 2.10 smoke)
+- [ ] 3a.5 — Next real `/opsx:apply` session shows agent-invoked preflight in chat (natural smoke; tick after observation)
 
-Tick each in `tasks.md` after verifying. Once all are ticked, Section 6 (validate + adversarial-review + archive) becomes runnable.
+Tick each in `tasks.md` (or the archived `tasks.md` once `/opsx:archive` has run) after verifying.

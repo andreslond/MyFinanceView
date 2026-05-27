@@ -240,7 +240,7 @@ function Test-BackupFreshness {
         $tsString = $obj.timestamp
         if ([string]::IsNullOrEmpty($tsString)) {
             Write-Check -Tag 'WARN' -Label 'supabase backup freshness' `
-                -Detail 'last-success.json missing `timestamp` field'
+                -Detail "last-success.json missing 'timestamp' field"
             return
         }
         $ts = [DateTimeOffset]::Parse($tsString).UtcDateTime

@@ -153,7 +153,7 @@ Adversarial review is valuable. Adversarial review unfiltered is scope-creep mac
 
 1. **Threat model first.** `proposal.md` declares the adversary, the assets, and what is *out of scope*. The reviewer is told this up front (the prompt to `adversarial-reviewer` MUST include the threat-model section verbatim).
 2. **Severity gates auto-action.** Blocker/Major default to incorporated; Minor/Question default to deferred. The operator only intervenes on the exceptions.
-3. **No anonymous scope creep.** Every finding that lands in code gets a back-reference in the commit message (e.g. "addresses finding #B3 of adversarial review report at <path>"). Every finding rejected gets a one-line reason in `design.md`. After the change archives, the reviewer's file is preserved under `openspec/archive/<change>/adversarial-review.md`.
+3. **No anonymous scope creep.** Every finding that lands in code gets a back-reference in the commit message (e.g. "addresses finding #B3 of adversarial review report at <path>"). Every finding rejected gets a one-line reason in `design.md`. After the change archives, the reviewer's file is preserved under `openspec/changes/archive/<date>-<change>/adversarial-review.md`.
 
 If the reviewer disagrees with the threat model, that disagreement is itself a Major finding ("threat model is too narrow") and the operator decides whether to widen it or reject.
 
