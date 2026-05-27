@@ -12,6 +12,25 @@ This version adds **4 mandatory gates** (A, B, C, D) where work stops until the 
 
 ---
 
+## 0. Session start — what every session sees first
+
+Every Claude Code session opened in this repo runs `scripts/preflight.ps1` via the `SessionStart` hook configured in `.claude/settings.json`. The script's stdout is injected as additional context in the first conversation turn, so the operator (and Claude) start oriented to repo state without an extra tool call.
+
+Preflight produces one line per check tagged `[OK]` / `[WARN]` / `[FAIL]` / `[SKIP]`, then a single summary line. It covers:
+
+- number of active changes under `openspec/changes/` (excluding `archive/`)
+- `./mvnw -q compile` exit status (fast compile, NOT verify — see [base-standards.md §5](base-standards.md#5-quality-bar))
+- working tree cleanliness (`git status --porcelain`)
+- current branch + last commit (informational)
+- per-active-change presence of `proposal.md`, `design.md`, `tasks.md`, `progress.md`
+- last verified Supabase backup timestamp (via `rclone`, gracefully `[SKIP]`ped when `rclone` is not installed locally)
+
+Exit code = number of `[FAIL]` lines; `[WARN]` and `[SKIP]` are not failures. The hook is informational only — a non-zero exit does NOT block the session (Claude acknowledges blockers and adjusts per turn).
+
+If the first turn does NOT include preflight output, check that `scripts/preflight.ps1` exists at the worktree root and that `.claude/settings.json` carries the `hooks.SessionStart` entry. See `openspec/changes/harness-progress-tracking/design.md` Decisions 4–7 for the design rationale.
+
+---
+
 ## 1. The 8 phases (and the 4 gates between them)
 
 ```
@@ -81,6 +100,8 @@ Order of gates is **A → B → D → C** by phase number — D fires before C b
 **Fires:** between `tasks.md` complete and the first `backend-developer` spawn.
 
 **What Claude does:**
+
+0. **Read `openspec/changes/<id>/progress.md` first and post a one-paragraph "resuming from" summary** citing `current_task`, `next_step`, and any non-empty `decisions_pending_design_update` or `blockers`. If `progress.md.last_updated` is older than the most recent commit on the change branch, the summary MUST explicitly flag the staleness — e.g. `WARNING: progress.md last updated <T1> but most recent commit is <T2> by <author>; verify next_step against the latest commit before proceeding`. If `progress.md` is missing entirely, create it from `openspec/templates/progress-template.md` and log `[recovered missing progress.md]` before continuing. See `openspec/changes/harness-progress-tracking/design.md` Decision 2 (per-task cadence) and the `harness-progress-tracking` capability spec for the binding scenarios.
 1. Confirms: "I'll spawn `backend-developer` on Sonnet 4.6 for tasks X.Y → X.Z. Expected cost: ~M tokens. Async or sequential?"
 2. Names every subagent it intends to spawn and the task ranges.
 3. Surfaces any pre-implementation manual setup tasks the operator owes (e.g. "task 1.2 — you need to run `age-keygen` before I can proceed").
@@ -88,6 +109,8 @@ Order of gates is **A → B → D → C** by phase number — D fires before C b
 **Operator's job:** confirm, redirect (different subagent, different model), or split the apply into smaller batches.
 
 **Pass condition:** operator says "go".
+
+**Note on `progress.md` updates during Phase 5:** the `backend-developer` subagent rewrites `progress.md` at the end of every closed task (see `.claude/agents/backend-developer.md` and design Decision 2). The cadence is per-task, NOT per-tool-call.
 
 ### Gate C — Finding triage (after `adversarial-review`)
 

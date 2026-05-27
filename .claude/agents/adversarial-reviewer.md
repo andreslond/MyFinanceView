@@ -79,6 +79,7 @@ Try to break the system. For each file/function in the diff, hunt for:
 - jOOQ used; no JPA.
 - No WebFlux / Reactor.
 - Tests follow `should{Result}When{Condition}` naming.
+- **`progress.md` freshness** (process-tooling check, category `process-tooling`): if the change you're reviewing has an `openspec/changes/<id>/progress.md` file whose `last_updated` timestamp is older than the most recent commit on the change branch, raise it as a **Minor** finding with the recommended fix "rewrite progress.md to reflect the latest task state before archive". Rationale: the per-change progress file is the source of truth for "where is this change RIGHT NOW" and a stale file silently misleads the next session. See `openspec/changes/harness-progress-tracking/design.md` Decision 2 + Open Question 4.
 
 ## Phase 5 — Classify findings
 

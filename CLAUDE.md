@@ -46,6 +46,8 @@ See [base-standards.md §2](docs/base-standards.md) and [backend-standards.md §
 
 ## Workflow (per change)
 
+Sessions start with `scripts/preflight.ps1` output (via SessionStart hook in `.claude/settings.json`) — read it first. Active changes carry a live `progress.md` (schema: `openspec/templates/progress-template.md`) that the `backend-developer` subagent rewrites after every closed task; `/opsx:apply` reads it on entry and posts a "resuming from" summary.
+
 The full spec-driven + TDD + adversarial-review flow:
 
 ```

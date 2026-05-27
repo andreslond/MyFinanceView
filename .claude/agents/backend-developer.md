@@ -43,6 +43,7 @@ For every change:
 3. **One module touched per change** unless the spec explicitly crosses modules.
 4. **Controllers are thin.** Deserialize → extract `user_id` from JWT → call service → return DTO. No business logic.
 5. **Services depend on repository interfaces** (in `db/repository/`), not on jOOQ types directly. The jOOQ implementations live in `db/jooq/`.
+6. **Update `openspec/changes/<id>/progress.md` after every closed task.** After closing every task in `tasks.md` (i.e. flipping `- [ ]` to `- [x]`), rewrite `openspec/changes/<id>/progress.md` per the schema in `openspec/templates/progress-template.md`. Update `last_completed` to the just-closed task ID, set `current_task` to the next pending task ID (or `none` if all closed), set `next_step` to one line describing that task's first action, refresh `last_updated` to the current ISO-8601 UTC timestamp, and append to `decisions_pending_design_update` or `blockers` if anything new surfaced during the task. **Do NOT update after every tool call** — per-task cadence only. See `openspec/changes/harness-progress-tracking/design.md` Decision 2 for the rationale (write overhead vs. information value).
 
 ## Code patterns to use
 
