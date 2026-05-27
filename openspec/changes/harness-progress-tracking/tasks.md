@@ -24,11 +24,11 @@
 
 ## 3. SessionStart hook
 
-- [ ] 3.1 Read existing `.claude/settings.json` to capture any current `hooks.SessionStart` entries; the new entry MUST be additive (append, not replace)
-- [ ] 3.2 Add a `hooks.SessionStart` entry with `type: "command"` and command per Decision 5: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1 2>nul || powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\preflight.ps1`. If `.claude/settings.json` does not exist yet, create it with the minimal `{"hooks":{"SessionStart":[…]}}` envelope.
-- [ ] 3.3 Open a fresh Claude Code session in this repo; confirm preflight output appears in the first conversation turn as additional context (visible in the session log if not in chat); the operator manually verifies this and ticks the box
-- [ ] 3.4 Smoke-test the fallback path: temporarily rename `pwsh.exe` (or remove it from `$env:Path`), open a fresh session, confirm `powershell.exe` ran the script; restore PATH
-- [ ] 3.5 Document the hook entry's purpose in a short comment on the JSON above it (JSONC is fine if `.claude/settings.json` allows it; otherwise inline string note)
+- [x] 3.1 Read existing `.claude/settings.json` to capture any current `hooks.SessionStart` entries; the new entry MUST be additive (append, not replace)
+- [x] 3.2 Add a `hooks.SessionStart` entry with `type: "command"` and command per Decision 5: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1 2>nul || powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\preflight.ps1`. If `.claude/settings.json` does not exist yet, create it with the minimal `{"hooks":{"SessionStart":[…]}}` envelope.
+- [ ] 3.3 Open a fresh Claude Code session in this repo; confirm preflight output appears in the first conversation turn as additional context (visible in the session log if not in chat); the operator manually verifies this and ticks the box (OPERATOR ACTION — see notes/operator-handoff.md)
+- [ ] 3.4 Smoke-test the fallback path: temporarily rename `pwsh.exe` (or remove it from `$env:Path`), open a fresh session, confirm `powershell.exe` ran the script; restore PATH (OPERATOR ACTION — see notes/operator-handoff.md)
+- [x] 3.5 Document the hook entry's purpose in a short comment on the JSON above it (JSONC is fine if `.claude/settings.json` allows it; otherwise inline string note)
 
 ## 4. Workflow and agent updates
 
