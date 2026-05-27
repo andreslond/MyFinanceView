@@ -70,46 +70,39 @@ PowerShell is the operator's native shell and the only one guaranteed to be on P
 - *Cross-platform Node CLI* — adds a Node + npm dependency for what is a 50-line shell report.
 - *Python (operator already has it for Supabase work)* — comparable to PowerShell but adds a runtime the hook depends on; PowerShell is already present.
 
-### Decision 5 — Hook command resolution: `pwsh` preferred, `powershell.exe` fallback
+### Decision 5 (v2) — Preflight is agent-invoked via CLAUDE.md directive, NOT a SessionStart hook
 
-The SessionStart hook entry in `.claude/settings.json` uses a small wrapper command that tries `pwsh` first and falls back to `powershell.exe -File scripts\preflight.ps1`. This handles the realistic case of an operator running PS 5.1 only (the Windows 10 default) without forcing them to install PS 7 just to start a session.
+**REVISED 2026-05-27 after operator dogfooding of v1.** The original Decision 5 specified a `SessionStart` hook in `.claude/settings.json` that fires on every session. That design landed and was tested in a fresh session, where Smoke C revealed two problems:
 
-Concretely:
-```jsonc
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "type": "command",
-        "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1 2>nul || powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\preflight.ps1"
-      }
-    ]
-  }
-}
-```
+1. **Every-session overhead.** `mvn -q compile` (cold) costs 3–8 seconds. The operator's actual usage mixes "I need to do real work" sessions with "explain this code" / "what's in this file" trivial sessions. The hook taxed all of them equally — wrong default for a single-developer project with mixed session intents.
+2. **Operator can't see the output.** Per Claude Code docs, SessionStart stdout is injected as additional context for Claude but is NOT printed in the operator's terminal. The first dogfood session looked broken ("parece que no se ejecuta") even though it was working correctly — the operator only saw the result by asking Claude to quote its session-start context.
 
-`-NoProfile` keeps execution fast (skips loading the operator's profile.ps1). `-ExecutionPolicy Bypass` prevents a session-blocking prompt on machines where the default policy is `Restricted`.
+The replacement design follows the `betta-tech/ejemplo-harness-subagentes` pattern: the agent reads `CLAUDE.md` at session start, sees the directive "invoke `scripts/preflight.ps1` and report its output before non-trivial work", and decides per-session whether the work qualifies. Trivial sessions pay zero overhead; real work runs preflight as the agent's first tool call (and the operator SEES it in the conversation, not as invisible context).
+
+`CLAUDE.md` carries the directive verbatim — there is no settings hook, no shell escape laberinto, no JSON schema fragility. The agent is the gate.
 
 **Alternatives considered:**
-- *`pwsh` only* — breaks for any operator without PS 7.
-- *`powershell.exe` only* — works everywhere on Windows but doesn't get PS 7 niceties when available.
-- *No fallback, fail loudly* — punishes operators for not having PS 7 installed; the script itself is PS 5.1-compatible, so there's no reason to gate the session on the runtime version.
+- *SessionStart hook* — REJECTED (v1 implementation, rolled back). The hook fires on every session regardless of intent, takes 3–8 s, and produces output that the operator can't see in the terminal. Reverting to v2 also removes a class of hook-runtime bugs (Git Bash backslash escapes, cmd-vs-Bash redirect mismatches, `matcher`-vs-direct-entry schema confusion) — all three bugs were hit during dogfooding before the rollback decision.
+- *Hook with bypass env var (Option D from the rollback discussion)* — half-measure. Still requires operators to remember `$env:SKIP_PREFLIGHT=1` for trivial sessions; cognitive load > benefit.
+- *Move hook to `.claude/settings.local.json` (gitignored, operator-controlled)* — defeats the purpose of "everyone in the project starts from the same baseline" and pushes the install-the-hook decision onto a future operator who clones the repo.
+- *No preflight at all* — loses the value entirely. The agent-invoked variant keeps the value (deterministic repo-state report at the start of real work) without the cost.
 
 ### Decision 6 — Preflight exit code semantics: `[FAIL]` → non-zero, `[WARN]` → zero
 
-`[FAIL]` lines (compile broken, working tree dirty unexpectedly, mandatory file missing) cause exit ≠ 0; `[WARN]` lines (>1 active change, optional tool missing → routed to `[SKIP]`) do not. Conflating the two means a legitimate "I'm intentionally working on two changes" warns the operator into a panic; separating them lets the hook output stay informational while still surfacing real blockers.
+`[FAIL]` lines (compile broken, working tree dirty unexpectedly, mandatory file missing) cause exit ≠ 0; `[WARN]` lines (>1 active change, optional tool missing → routed to `[SKIP]`) do not. Conflating the two means a legitimate "I'm intentionally working on two changes" warns the operator into a panic; separating them lets the report stay informational while still surfacing real blockers. **Still meaningful under Decision 5 v2:** the agent reads the exit code and uses it as a "go ahead?" signal before starting non-trivial work — exit ≠ 0 triggers the "stop and ask the operator" behaviour mandated by `CLAUDE.md`.
 
 **Alternatives considered:**
-- *Any non-OK is non-zero* — too noisy; the WARN case (>1 active change) is legitimate in this project (we have supabase-backup-policy + harness-progress-tracking active right now).
-- *No exit code at all (always 0)* — defeats the purpose of having a "go ahead" signal.
+- *Any non-OK is non-zero* — too noisy; the WARN case (>1 active change) is legitimate in this project.
+- *No exit code at all (always 0)* — defeats the purpose of having a "go ahead" signal that the agent can branch on.
 
-### Decision 7 — Hook is informational, not blocking
+### Decision 7 (v2) — Preflight is informational, not runtime-enforced
 
-The SessionStart hook surfaces output as additional context but does NOT block the session if preflight exits non-zero. Claude reads the `[FAIL]` line and decides per turn whether to acknowledge it or proceed. This matches the project's "documentation-gate, not runtime-enforced" stance baked into the Supabase write rule.
+The preflight report is consumed by the agent (not by a hook, not by CI, not by a wrapper) and the agent decides what to do with it. There is no runtime mechanism that refuses to start a session, refuses to start `/opsx:apply`, or refuses any other command. This matches the project's "documentation-gate, not runtime-enforced" stance baked into the Supabase write rule (`[[supabase-production-data]]`) and the workflow gates in `docs/workflow.md` (operator OK is the gate, not a script).
 
 **Alternatives considered:**
-- *Hard block (exit non-zero from hook aborts session)* — would prevent legitimate "I need to fix the broken build" sessions from starting at all; the cure is worse than the disease.
-- *Block only on a specific FAIL subset* — adds policy complexity without clear value; trust the operator + Claude to read the report.
+- *Hard block via hook exit code* — was the v1 plan; rejected with Decision 5 v2.
+- *CI gate that runs preflight on every PR* — premature; the project has no CI today (per `SPEC.md`).
+- *Pre-commit hook that runs preflight* — would tax every commit, not every session — same overhead complaint, different surface.
 
 ### Decision 8 — `progress.md` is git-tracked (not gitignored)
 
@@ -121,41 +114,44 @@ The file is committed alongside other change artefacts. Concurrent-session race 
 
 ## Risks / Trade-offs
 
-[Risk] Hook output adds tokens to every session. → Mitigation: terse single-line-per-check format (deliberate ASCII table, no JSON), tag-prefixed (`[OK]`/`[WARN]`/`[FAIL]`/`[SKIP]`) so Claude can scan in O(lines) without parsing.
+[Risk] Preflight output adds tokens to every real-work session. → Mitigation: terse single-line-per-check format (deliberate ASCII table, no JSON), tag-prefixed (`[OK]`/`[WARN]`/`[FAIL]`/`[SKIP]`) so Claude can scan in O(lines) without parsing. Under Decision 5 v2 (agent-invoked), trivial sessions skip preflight entirely — they pay zero token cost.
 
 [Risk] `progress.md` goes stale because the subagent forgets to update it. → Mitigation: `adversarial-review` is briefed (via the agent definition update) to flag `progress.md.last_updated < HEAD commit timestamp` as a Minor finding. The `/opsx:apply` "resuming from" summary also surfaces the staleness in plain English.
 
 [Risk] Two sessions touch the same change concurrently and produce conflicting `progress.md` writes. → Mitigation: git's merge surface. Acceptable for single-operator; if multi-operator ever lands, a `change-lock` follow-up addresses it.
 
-[Risk] Preflight script breaks on a Windows version we don't test (older Server SKUs, ARM, etc.). → Mitigation: script is PS 5.1-compatible (the lowest-common-denominator on supported Windows); no PS 7-only cmdlets. Falls back gracefully if `git`, `mvn`, or `rclone` is absent. The hook itself swallows preflight failure (`|| true`-equivalent) so a broken preflight never prevents a session.
+[Risk] Preflight script breaks on a Windows version we don't test (older Server SKUs, ARM, etc.). → Mitigation: script is PS 5.1-compatible (the lowest-common-denominator on supported Windows); no PS 7-only cmdlets. Falls back gracefully if `git`, `mvn`, or `rclone` is absent. Under Decision 5 v2 (agent-invoked), a broken preflight surfaces as a tool-call error to the agent, which reports it to the operator — no silent session failure.
 
-[Risk] `pwsh`/`powershell.exe` invocation through the hook fails because of an `ExecutionPolicy` setting in a managed environment. → Mitigation: explicit `-ExecutionPolicy Bypass` per Decision 5; the script is unsigned and intentionally so (signing infrastructure is out of scope for v1).
+[Risk] `powershell.exe` invocation by the agent fails because of an `ExecutionPolicy` setting in a managed environment. → Mitigation: the agent invokes the script via `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1`. The script is unsigned and intentionally so (signing infrastructure is out of scope for v1).
+
+[Risk] Agent forgets to run preflight before non-trivial work. → Mitigation: CLAUDE.md carries the directive as a clear bullet in the workflow section, and the `backend-developer` subagent's definition mirrors it. `adversarial-review` is briefed to flag missing-preflight evidence at the start of a `/opsx:apply` session as a Minor finding (category `process-tooling`). The runtime cost of forgetting is low — the agent can run preflight at any later point in the session and recover.
 
 [Risk] The subagent's per-task `progress.md` rewrite drifts from the schema (e.g., adds a top-level key the schema doesn't list, removes a required one). → Mitigation: the template carries inline comments documenting required vs optional keys. A follow-up `harness-checkpoints` change can add a `validate-progress.ps1` that enforces the schema as part of preflight; v1 ships without enforcement and relies on subagent discipline + adversarial review.
 
 [Trade-off] We accept that `progress.md` is not real-time accurate to within seconds — it lags by one task. The trade vs constant rewrites is tokens + write churn for staleness bounded to "the most recent task". Acceptable.
 
-[Trade-off] We accept that the SessionStart hook adds a 1–3 s delay at session start (PowerShell startup + `mvn compile` cold-start cost). For sessions that do real work this is invisible; for sessions that are just a question ("what's the date?"), it's a small tax. Worth it.
+[Trade-off] We accept that the agent might run preflight twice in the same session (once at start, once after a long pause). The cost is one extra `mvn -q compile` (3–8 s) and a few tokens. Lower-cost than the alternative ("the agent skips preflight because it ran 30 minutes ago and the state has since changed").
 
 ## Migration Plan
 
 This is a greenfield process-tooling change — no data migration, no rollback drama. Steps:
 
 1. Land `openspec/templates/progress-template.md` with the YAML skeleton.
-2. Land `scripts/preflight.ps1` and smoke-test it manually from PowerShell 5.1 AND `pwsh` 7 on the operator's Windows machine.
-3. Add the SessionStart hook entry to `.claude/settings.json`; verify a new Claude Code session surfaces the preflight output.
-4. Update `docs/workflow.md` Phase D (read + write `progress.md`) and the "session start" preamble (preflight output is now expected).
-5. Update `.claude/agents/backend-developer.md` with the `progress.md` update directive.
+2. Land `scripts/preflight.ps1` and smoke-test it manually from PowerShell 5.1 on the operator's Windows machine. (PS 7 / `pwsh` smoke is deferred — Decision 5 v2 means the agent invokes `powershell.exe` directly; pwsh-preferred-with-fallback complexity is no longer relevant.)
+3. **NO SessionStart hook.** A previous draft of this step added a hook to `.claude/settings.json`; that draft was rolled back per Decision 5 v2.
+4. Update `docs/workflow.md` Phase D / Gate D (read + write `progress.md`) and rewrite the `## 0. Session start` section to describe agent-invoked preflight (replacing the prior hook-based wording).
+5. Update `.claude/agents/backend-developer.md` with the `progress.md` update directive AND the preflight-before-non-trivial-work directive (mirrors CLAUDE.md so the subagent doesn't have to re-derive it from project-level CLAUDE.md).
 6. Backfill `progress.md` into existing active changes (`supabase-backup-policy`, this change `harness-progress-tracking`) by hand using the template, populating `current_task` / `last_completed` from the current `tasks.md` checkbox state.
-7. Update `CLAUDE.md` with a pointer to preflight + progress.md in the workflow section.
+7. **Update `CLAUDE.md` with the canonical preflight directive** (the primary implementation of Decision 5 v2): "Before non-trivial work in this repo (any `/opsx:apply`, any code edit, any architectural decision, any commit), run `scripts/preflight.ps1` first and report the output. Trivial conversational sessions may skip it. A non-zero exit MUST be acknowledged in the agent's first response."
 8. Optionally update the `openspec-propose` skill (or document a manual step) to copy the template at change-creation time. If the skill is upstream-maintained and we can't patch it, the operator runs a small `Copy-Item` after `openspec new change` until the upstream supports templates natively — documented in `docs/workflow.md`.
 
-**Rollback:** delete `progress-template.md` + `preflight.ps1`, remove the SessionStart hook entry, revert the two doc files, leave the existing `progress.md` files in active changes as harmless extra artefacts (or `git rm` them if desired). Zero side-effects beyond the deleted files.
+**Rollback:** delete `progress-template.md` + `preflight.ps1`, revert the doc-only changes (CLAUDE.md, workflow.md, backend-developer.md, adversarial-reviewer.md), leave the existing `progress.md` files in active changes as harmless extra artefacts (or `git rm` them if desired). Zero side-effects beyond the deleted files. **Note:** under Decision 5 v2 there is no SessionStart hook to remove.
 
 ## Open Questions
 
-1. **Does the `openspec-propose` skill support a template copy step out-of-the-box, or do we need a manual `Copy-Item` after `openspec new change`?** The skill instructions don't mention templates; we'll discover during the `/opsx:apply` implementation phase. If not, we document a manual step in `docs/workflow.md` and file a follow-up.
+1. **Does the `openspec-propose` skill support a template copy step out-of-the-box, or do we need a manual `Copy-Item` after `openspec new change`?** RESOLVED during implementation: the project-level `.claude/commands/opsx/propose.md` skill was patched directly AND a manual fallback was documented in `docs/workflow.md` Phase B. Belt-and-suspenders.
 2. **Should the `[WARN] 2 active changes` line block when the count exceeds some threshold (e.g., 4)?** v1 says no — it's always warn-only. Revisit if the project routinely runs many parallel changes.
-3. **Should preflight cache its slowest check (`mvn compile`) between sessions if the working tree is unchanged?** Plausible 1-second saving per session start; deferred to a follow-up if the start cost becomes annoying in practice.
-4. **Should the `adversarial-reviewer` agent's prompt be updated as part of this change to look for stale `progress.md`?** Probably yes — `[[adversarial-reviewer]]` is a project agent we control. v1 plan: include a small one-line addition to its prompt in the implementation tasks. If it adds friction we drop it.
-5. **Should the SessionStart hook also dump `progress.md` for every active change as part of its output?** Tempting but probably too noisy when many changes exist. v1 says no — preflight prints `presence/absence` per change, `/opsx:apply` reads the specific change's `progress.md` on demand.
+3. **Should preflight cache its slowest check (`mvn compile`) between sessions if the working tree is unchanged?** Less pressing under Decision 5 v2 (agent decides when to run preflight; trivial sessions skip it entirely). Deferred to a follow-up if the per-real-session cost becomes annoying in practice.
+4. **Should the `adversarial-reviewer` agent's prompt be updated as part of this change to look for stale `progress.md`?** RESOLVED: yes, included in task 4.4 of the implementation. Also extended to flag "missing preflight evidence at the start of a `/opsx:apply` session" (Decision 5 v2 reinforcement) as a Minor `process-tooling` finding.
+5. **Should preflight also dump `progress.md` for every active change as part of its output?** Under Decision 5 v2 (agent-invoked, not auto-fired), this becomes more reasonable — operators see the output directly. v1 still says no (keeps preflight terse; agent reads specific `progress.md` files on demand). Revisit after dogfooding several real `/opsx:apply` sessions.
+6. **(New under Decision 5 v2)** When the agent runs preflight at the start of `/opsx:apply` and the report has `[FAIL] mvn compile failed`, the spec says "stop and ask the operator". But what if the broken compile is INTENTIONAL (e.g., the operator just started a refactor that left the build red and is asking Claude to help fix it)? v1 plan: the agent's "stop and ask" response includes an explicit "is this intentional?" question; operator answers and Claude proceeds. Formalize this back-and-forth in CLAUDE.md if the friction becomes noticeable.

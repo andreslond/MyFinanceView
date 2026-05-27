@@ -12,9 +12,16 @@ This version adds **4 mandatory gates** (A, B, C, D) where work stops until the 
 
 ---
 
-## 0. Session start — what every session sees first
+## 0. Session start — what every non-trivial session does first
 
-Every Claude Code session opened in this repo runs `scripts/preflight.ps1` via the `SessionStart` hook configured in `.claude/settings.json`. The script's stdout is injected as additional context in the first conversation turn, so the operator (and Claude) start oriented to repo state without an extra tool call.
+Before any non-trivial work (any `/opsx:apply`, any code edit, any architectural decision, any commit), the agent SHALL invoke `scripts/preflight.ps1` and report the output to the operator in chat. This is mandated by the directive in `CLAUDE.md` (workflow section) and mirrored in `.claude/agents/backend-developer.md`. **There is no `SessionStart` hook** — an earlier draft of the harness installed one and was rolled back after dogfooding revealed it fired on every session regardless of intent, produced operator-invisible output, and surfaced cross-shell escape bugs. See `openspec/changes/harness-progress-tracking/design.md` Decision 5 v2 for the rollback rationale; `betta-tech/ejemplo-harness-subagentes` (`init.sh` invoked from `AGENTS.md`) is the reference pattern.
+
+Trivial conversational sessions (questions, codebase exploration, explanations with no code-change intent) MAY skip preflight — agent judgment.
+
+Invocation from the agent:
+```
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1
+```
 
 Preflight produces one line per check tagged `[OK]` / `[WARN]` / `[FAIL]` / `[SKIP]`, then a single summary line. It covers:
 
@@ -25,9 +32,9 @@ Preflight produces one line per check tagged `[OK]` / `[WARN]` / `[FAIL]` / `[SK
 - per-active-change presence of `proposal.md`, `design.md`, `tasks.md`, `progress.md`
 - last verified Supabase backup timestamp (via `rclone`, gracefully `[SKIP]`ped when `rclone` is not installed locally)
 
-Exit code = number of `[FAIL]` lines; `[WARN]` and `[SKIP]` are not failures. The hook is informational only — a non-zero exit does NOT block the session (Claude acknowledges blockers and adjusts per turn).
+Exit code = number of `[FAIL]` lines; `[WARN]` and `[SKIP]` are not failures. A non-zero exit MUST be acknowledged in the agent's first response — when `[FAIL] mvn compile failed` is present, the agent SHALL stop and ask the operator whether the broken build is intentional before starting `/opsx:apply`.
 
-If the first turn does NOT include preflight output, check that `scripts/preflight.ps1` exists at the worktree root and that `.claude/settings.json` carries the `hooks.SessionStart` entry. See `openspec/changes/harness-progress-tracking/design.md` Decisions 4–7 for the design rationale.
+If `scripts/preflight.ps1` is missing or fails to run, the agent reports the error to the operator and proceeds with caution (the absence of preflight is itself a `[FAIL]`-class signal). See `openspec/changes/harness-progress-tracking/design.md` Decisions 4–7 for the full rationale.
 
 ---
 

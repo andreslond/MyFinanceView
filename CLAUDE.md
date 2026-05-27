@@ -46,7 +46,9 @@ See [base-standards.md §2](docs/base-standards.md) and [backend-standards.md §
 
 ## Workflow (per change)
 
-Sessions start with `scripts/preflight.ps1` output (via SessionStart hook in `.claude/settings.json`) — read it first. Active changes carry a live `progress.md` (schema: `openspec/templates/progress-template.md`) that the `backend-developer` subagent rewrites after every closed task; `/opsx:apply` reads it on entry and posts a "resuming from" summary.
+**Preflight before non-trivial work.** Before any `/opsx:apply`, any code edit, any architectural decision, or any commit, run `scripts/preflight.ps1` (via `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1`) and report the output to the operator in chat. Trivial conversational sessions (questions, codebase exploration, explanations) may skip preflight — agent judgment. A non-zero preflight exit code MUST be acknowledged in the agent's first response; when `[FAIL] mvn compile failed` is present, the agent SHALL stop and ask the operator before starting `/opsx:apply` (unless the operator has already explained the broken-build intent). There is **no SessionStart hook** — this is an instruction the agent reads at session start, not a runtime trigger; see `openspec/changes/harness-progress-tracking/design.md` Decision 5 v2 for the rationale (the hook was implemented in v1 and rolled back after dogfooding).
+
+**`progress.md` per active change.** Each `openspec/changes/<id>/` carries a live `progress.md` (schema: `openspec/templates/progress-template.md`) that the `backend-developer` subagent rewrites after every closed task. `/opsx:apply` reads it on entry and posts a "resuming from" summary so sessions can pick up coherently across context compactions.
 
 The full spec-driven + TDD + adversarial-review flow:
 

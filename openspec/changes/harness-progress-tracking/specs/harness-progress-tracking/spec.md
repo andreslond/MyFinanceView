@@ -88,16 +88,23 @@ The preflight script SHALL NOT abort when an optional dependency (currently `rcl
 - **WHEN** `scripts/preflight.ps1` runs on a machine where `rclone` is not on PATH
 - **THEN** the Supabase-backup-freshness line is `[SKIP] rclone not installed — backup freshness check skipped (install rclone to enable)`, every other check proceeds normally, and the script exits 0 if no other check failed
 
-### Requirement: SessionStart hook surfaces preflight output
+### Requirement: CLAUDE.md instructs agents to invoke preflight before non-trivial work
 
-The Claude Code SessionStart hook configured in `.claude/settings.json` SHALL invoke `pwsh -File scripts/preflight.ps1` (falling back to `powershell.exe -File scripts/preflight.ps1` if `pwsh` is not on PATH) at the start of every session and SHALL surface the script's stdout in the first conversation turn as additional context. Existing hook entries MUST NOT be removed or reordered by the change — the new hook entry is additive.
+`CLAUDE.md` SHALL contain a directive instructing Claude Code agents to invoke `scripts/preflight.ps1` and report its output BEFORE starting any non-trivial work (any `/opsx:apply` invocation, any code edit, any architectural decision, any commit). Sessions that are purely conversational (answering questions, exploring the codebase, explaining concepts) MAY skip preflight; this is an agent judgment call documented in CLAUDE.md, not a runtime gate. The directive MUST also state that a non-zero preflight exit code SHALL be acknowledged in the agent's first response and SHALL inform the agent's subsequent recommendations (e.g., refuse to start `/opsx:apply` when `[FAIL] mvn compile failed` is present until the operator resolves it).
 
-#### Scenario: Session starts with healthy preflight
+**Rationale (cross-reference design Decision 5 v2):** This change does NOT install a `SessionStart` hook in `.claude/settings.json`. A previous design draft did install such a hook; it was reverted after operator dogfooding revealed the hook fires on every session regardless of intent (trivial questions paid a 3–8 s `mvn compile` tax) AND surfaces Claude-internal context that the operator cannot see in the terminal, weakening the operator's ability to verify the hook ran. The agent-invoked pattern matches the reference implementation in `betta-tech/ejemplo-harness-subagentes` (`init.sh` invoked from `AGENTS.md` instructions, not a hook).
 
-- **WHEN** a new Claude Code session opens in the MyFinanceView repository
-- **THEN** the SessionStart hook runs `scripts/preflight.ps1`, the script's `[OK]` lines appear in the first conversation turn as additional context, and Claude's first response can reference repo state without an extra tool call
+#### Scenario: Agent starts a /opsx:apply session
 
-#### Scenario: Session starts with failing preflight
+- **WHEN** Claude is asked to run `/opsx:apply <change>` and has not yet invoked preflight in this session
+- **THEN** Claude SHALL run `scripts/preflight.ps1` as its first tool call, report the output to the operator, and acknowledge any `[FAIL]` or `[WARN]` lines BEFORE delegating to the `backend-developer` subagent
 
-- **WHEN** a new session opens in a repo where preflight reports `[FAIL] mvn compile failed`
-- **THEN** the `[FAIL]` line appears in the first conversation turn, and Claude's first response SHALL acknowledge the failure and recommend resolving it before any code change rather than silently proceeding
+#### Scenario: Agent starts a trivial conversational session
+
+- **WHEN** the operator opens a Claude Code session and asks a conversational question (e.g., "explain how the savings_goals plan handles edge cases") with no code-change intent
+- **THEN** Claude MAY answer directly without invoking preflight; the directive's "non-trivial work" wording explicitly permits this skip
+
+#### Scenario: Preflight reports a build failure at the start of /opsx:apply
+
+- **WHEN** Claude runs preflight at the start of `/opsx:apply` and the output contains `[FAIL] mvn compile failed`
+- **THEN** Claude SHALL stop, report the failure to the operator, and recommend resolving the broken build before proceeding rather than starting the apply phase
