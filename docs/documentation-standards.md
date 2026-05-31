@@ -84,7 +84,7 @@ When Claude (or another AI) edits a doc:
 
 ## 8. Files NOT to Treat as Docs
 
-- `target/`, `node_modules/`, generated sources — outputs, not inputs.
+- `backend/target/`, `node_modules/`, generated sources — outputs, not inputs.
 - `.env*` files — config, not documentation.
-- `pom.xml`, `package.json` — build manifests; mention but don't duplicate their info in docs.
+- `backend/pom.xml`, `frontend/package.json` — build manifests; mention but don't duplicate their info in docs.
 - Anything under `archive/` — historical; if a future reader cites them, point to current source.

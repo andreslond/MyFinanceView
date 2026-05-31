@@ -42,27 +42,14 @@ LOCAL_DB_PORT=5433
 
 ## 3. Local Postgres (Docker Compose)
 
-`docker/docker-compose.yml`:
-```yaml
-services:
-  postgres:
-    image: postgres:17
-    environment:
-      POSTGRES_DB: myfinance_local
-      POSTGRES_USER: myfinance
-      POSTGRES_PASSWORD: localpassword
-    ports:
-      - "5433:5432"
-    volumes:
-      - ./db/migrations:/docker-entrypoint-initdb.d
-```
+`docker/docker-compose.yml` mounts SQL files from `backend/database/` (init-db.sh + local/V000 + migrations/V001..V003) into the Postgres container.
 
 Start: `docker compose -f docker/docker-compose.yml up -d`.
 Stop: `docker compose -f docker/docker-compose.yml down`.
 
 ## 4. Database Migrations
 
-Migrations live in `database/migrations/` with naming `V{n}__{description}.sql` (Flyway style, even though Flyway is not yet wired). Current numbering:
+Migrations live in `backend/database/migrations/` with naming `V{n}__{description}.sql` (Flyway style, even though Flyway is not yet wired). Current numbering:
 
 - V001..V003 — baseline schema (applied to Supabase remote)
 - V004..V008 — pending TASK-DB-01..05 (see [data-model.md §3](data-model.md))
@@ -72,30 +59,35 @@ Migrations live in `database/migrations/` with naming `V{n}__{description}.sql` 
 
 ## 5. jOOQ Code Generation
 
+All Maven commands run from `backend/` (where `pom.xml` and `mvnw` live).
+
 After every migration:
 
 ```bash
-mvn jooq-codegen:generate
+cd backend
+./mvnw jooq-codegen:generate
 ```
 
-Configuration target: `pom.xml` `<plugin>jooq-codegen-maven</plugin>` pointing at:
+Configuration target: `backend/pom.xml` `<plugin>jooq-codegen-maven</plugin>` pointing at:
 - the **local** Postgres (port 5433) for development, or
 - the **remote** Supabase via `DB_*` env vars for accurate codegen against production state.
 
-Generated classes go to `target/generated-sources/jooq/` (gitignored).
+Generated classes go to `backend/target/generated-sources/jooq/` (gitignored).
 
 ## 6. Running the App
 
 ### Profile `local` (default for dev)
 ```bash
-mvn spring-boot:run -Dspring-boot.run.profiles=local
+cd backend
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
 Hits the local Docker Postgres. Server on `http://localhost:8080`.
 
 ### Profile `prod` (against Supabase)
 Set env vars from §2 and:
 ```bash
-mvn spring-boot:run -Dspring-boot.run.profiles=prod
+cd backend
+./mvnw spring-boot:run -Dspring-boot.run.profiles=prod
 ```
 
 ### Health check
@@ -106,18 +98,22 @@ curl http://localhost:8080/actuator/health
 
 ## 7. Running Tests
 
+All from `backend/`:
+
 ```bash
+cd backend
+
 # All tests
-mvn test
+./mvnw test
 
 # Just unit tests (fast)
-mvn test -Dtest='*Test'
+./mvnw test -Dtest='*Test'
 
 # Just contract tests
-mvn test -Dtest='*ContractTest'
+./mvnw test -Dtest='*ContractTest'
 
 # Just integration tests (slow, Testcontainers)
-mvn test -Dtest='*IntegrationTest'
+./mvnw test -Dtest='*IntegrationTest'
 ```
 
 Testcontainers spins up a real Postgres 17 with the same schema for each test class. Expect ~10–30 s startup per class on first run.
@@ -166,19 +162,20 @@ Per change, follow [base-standards.md §3](base-standards.md):
 ### Generate a new domain module skeleton
 Manually:
 ```
-src/main/java/com/myfinanceview/domain/{name}/
+backend/src/main/java/com/myfinanceview/domain/{name}/
   {Name}Service.java
   {Name}.java                    ← domain type if needed (Record)
-src/main/java/com/myfinanceview/db/repository/{Name}Repository.java
-src/main/java/com/myfinanceview/db/jooq/Jooq{Name}Repository.java
-src/main/java/com/myfinanceview/api/controller/{Name}Controller.java
-src/main/java/com/myfinanceview/api/dto/{Name}DTO.java
-src/test/java/com/myfinanceview/...   ← parallel test packages
+backend/src/main/java/com/myfinanceview/db/repository/{Name}Repository.java
+backend/src/main/java/com/myfinanceview/db/jooq/Jooq{Name}Repository.java
+backend/src/main/java/com/myfinanceview/api/controller/{Name}Controller.java
+backend/src/main/java/com/myfinanceview/api/dto/{Name}DTO.java
+backend/src/test/java/com/myfinanceview/...   ← parallel test packages
 ```
 
 ### Re-run codegen after a schema change
 ```bash
-mvn jooq-codegen:generate
+cd backend
+./mvnw jooq-codegen:generate
 ```
 
 ### Reset local DB
@@ -186,7 +183,7 @@ mvn jooq-codegen:generate
 docker compose -f docker/docker-compose.yml down -v
 docker compose -f docker/docker-compose.yml up -d
 ```
-The `-v` flag drops volumes; migrations in `database/migrations/` re-run on start.
+The `-v` flag drops volumes; migrations in `backend/database/migrations/` re-run on start.
 
 ## 11. Troubleshooting
 

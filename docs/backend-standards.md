@@ -57,7 +57,7 @@ com.myfinanceview/
 
 ## 3. jOOQ Conventions
 
-- **Codegen** from the live `myfinance` schema in Supabase (read-only role). Output to `generated/` or `target/generated-sources/`.
+- **Codegen** from the live `myfinance` schema in Supabase (read-only role). Output to `generated/` or `backend/target/generated-sources/`.
 - Regenerate after every schema migration. Commit only **if** the generated code is committed (decide once and stick to it).
 - Use the DSL with `record()`, `into(Record.class)`, and explicit `select(field1, field2)` — avoid `selectFrom().fetch()` blanket queries.
 - For complex aggregations (corte de facturación, breakdown por categoría), prefer jOOQ over `@Query` JPQL-style strings; jOOQ shines exactly here.

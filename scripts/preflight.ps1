@@ -9,7 +9,7 @@
     [OK] / [WARN] / [FAIL] / [SKIP] covering:
 
       - active change count under openspec/changes/ (excluding archive/)
-      - ./mvnw -q compile exit status (fast compile, NOT verify)
+      - backend/mvnw -q compile exit status (fast compile, NOT verify)
       - working tree cleanliness (git status --porcelain empty?)
       - current branch + last commit hash + subject
       - per-active-change presence of proposal.md / design.md / tasks.md / progress.md
@@ -105,11 +105,12 @@ function Test-ActiveChanges {
 # Check 2 -- mvn compile (fast -- NOT verify; project rule base-standards.md §5)
 # ---------------------------------------------------------------------------
 function Test-MvnCompile {
-    $mvnw = Join-Path $repoRoot 'mvnw.cmd'
+    $backendDir = Join-Path $repoRoot 'backend'
+    $mvnw = Join-Path $backendDir 'mvnw.cmd'
     if (-not (Test-Path $mvnw)) {
-        $mvnw = Join-Path $repoRoot 'mvnw'
+        $mvnw = Join-Path $backendDir 'mvnw'
         if (-not (Test-Path $mvnw)) {
-            Write-Check -Tag 'SKIP' -Label 'mvn compile' -Detail "mvnw/mvnw.cmd not found at repo root"
+            Write-Check -Tag 'SKIP' -Label 'mvn compile' -Detail "mvnw/mvnw.cmd not found at backend/"
             return
         }
     }
@@ -119,7 +120,7 @@ function Test-MvnCompile {
     $tmpErr = [IO.Path]::GetTempFileName()
     try {
         $proc = Start-Process -FilePath $mvnw -ArgumentList @('-q','compile') `
-                              -WorkingDirectory $repoRoot -NoNewWindow -Wait -PassThru `
+                              -WorkingDirectory $backendDir -NoNewWindow -Wait -PassThru `
                               -RedirectStandardOutput $tmpOut -RedirectStandardError $tmpErr
         if ($proc.ExitCode -eq 0) {
             Write-Check -Tag 'OK' -Label 'mvn compile'

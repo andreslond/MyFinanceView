@@ -9,7 +9,7 @@ The system SHALL provide a Spring Boot 3.4+ application running on Java 25 that 
 
 #### Scenario: Application starts in local profile against Docker Postgres
 
-- **WHEN** the developer runs `./mvnw spring-boot:run -Dspring-boot.run.profiles=local` with the Docker Compose Postgres container up on port 5433
+- **WHEN** the developer runs `cd backend && ./mvnw spring-boot:run -Dspring-boot.run.profiles=local` with the Docker Compose Postgres container up on port 5433
 - **THEN** the application boots without exceptions, binds HTTP on port 8080, and writes an INFO log line that includes `profile=local`, `java=25`, and `virtualThreads=true`
 
 #### Scenario: Spring application context loads cleanly in tests
@@ -55,12 +55,12 @@ The system SHALL organize Java sources under `com.myfinanceview` in modules by b
 
 #### Scenario: All canonical packages exist in source tree
 
-- **WHEN** the developer lists `src/main/java/com/myfinanceview/` recursively
+- **WHEN** the developer lists `backend/src/main/java/com/myfinanceview/` recursively
 - **THEN** every package listed above is present and contains at least one `.java` file (entrypoint or `package-info.java`)
 
 ### Requirement: Local Postgres development environment via Docker Compose
 
-The system SHALL provide a `docker/docker-compose.yml` definition that runs `postgres:17` exposed on host port 5433 with a two-phase init orchestrator (`database/init-db.sh`). The orchestrator SHALL first apply `database/local/V000__local_supabase_stubs.sql` (local-only Supabase parity stubs — see "Local Supabase compatibility stubs" requirement below) and then apply `database/migrations/V001..Vn` in alphabetical order. On `docker compose up -d` from a clean volume the container ends with the full `myfinance` schema and V003 seed data applied. The local DB credentials default to user `myfinance` / password `localpassword` / db `myfinance_local` and MUST be documented in `.env.example`.
+The system SHALL provide a `docker/docker-compose.yml` definition that runs `postgres:17` exposed on host port 5433 with a two-phase init orchestrator (`backend/database/init-db.sh`). The orchestrator SHALL first apply `backend/database/local/V000__local_supabase_stubs.sql` (local-only Supabase parity stubs — see "Local Supabase compatibility stubs" requirement below) and then apply `backend/database/migrations/V001..Vn` in alphabetical order. On `docker compose up -d` from a clean volume the container ends with the full `myfinance` schema and V003 seed data applied. The local DB credentials default to user `myfinance` / password `localpassword` / db `myfinance_local` and MUST be documented in `.env.example`.
 
 #### Scenario: Docker Compose Postgres seeds the myfinance schema
 
@@ -70,15 +70,15 @@ The system SHALL provide a `docker/docker-compose.yml` definition that runs `pos
 #### Scenario: Testcontainers can run Postgres 17 with the same migrations
 
 - **WHEN** `PostgresTestcontainerTest.shouldStartPostgresContainerWithSeedSchemaWhenInitialised` runs
-- **THEN** a `PostgreSQLContainer<>("postgres:17")` starts, the test applies `database/local/V000` then `database/migrations/V001..V003` in order via JDBC, executes `SELECT count(*) FROM myfinance.categories`, and the result is greater than or equal to 19
+- **THEN** a `PostgreSQLContainer<>("postgres:17")` starts, the test applies `backend/database/local/V000` then `backend/database/migrations/V001..V003` in order via JDBC (located via walk-up from cwd), executes `SELECT count(*) FROM myfinance.categories`, and the result is greater than or equal to 19
 
 ### Requirement: Local Supabase compatibility stubs
 
-The system SHALL provide `database/local/V000__local_supabase_stubs.sql` containing the minimum surface a vanilla `postgres:17` needs for V001+V002 to apply cleanly — namely: schema `auth`, table `auth.users(id uuid PRIMARY KEY)`, function `auth.uid()`, and roles `anon`, `authenticated`, `service_role`. The stub file MUST be idempotent (`IF NOT EXISTS` / `OR REPLACE` / DO-block guards) and MUST live in `database/local/`, strictly separate from `database/migrations/`, so that the future Flyway adoption (TASK-DB-06) can point exclusively at `database/migrations/` and never accidentally apply local-only artefacts to Supabase remote.
+The system SHALL provide `backend/database/local/V000__local_supabase_stubs.sql` containing the minimum surface a vanilla `postgres:17` needs for V001+V002 to apply cleanly — namely: schema `auth`, table `auth.users(id uuid PRIMARY KEY)`, function `auth.uid()`, and roles `anon`, `authenticated`, `service_role`. The stub file MUST be idempotent (`IF NOT EXISTS` / `OR REPLACE` / DO-block guards) and MUST live in `backend/database/local/`, strictly separate from `backend/database/migrations/`, so that the future Flyway adoption (TASK-DB-06) can point exclusively at `backend/database/migrations/` and never accidentally apply local-only artefacts to Supabase remote.
 
 #### Scenario: V000 stub applies cleanly against vanilla Postgres
 
-- **WHEN** the orchestrator runs `database/local/V000__local_supabase_stubs.sql` against a freshly-initialised `postgres:17` container
+- **WHEN** the orchestrator runs `backend/database/local/V000__local_supabase_stubs.sql` against a freshly-initialised `postgres:17` container
 - **THEN** the SQL executes without error, the `auth` schema exists, `auth.users` accepts inserts and FK references, `auth.uid()` is callable, and the three Supabase roles exist
 
 #### Scenario: V000 stub is idempotent on re-runs
@@ -88,22 +88,22 @@ The system SHALL provide `database/local/V000__local_supabase_stubs.sql` contain
 
 #### Scenario: Real migrations folder contains only production migrations
 
-- **WHEN** `database/migrations/` is listed
+- **WHEN** `backend/database/migrations/` is listed
 - **THEN** no `V000` file is present; only `V001__initial_schema.sql`, `V002__rls_policies.sql`, `V003__seed_data.sql` (and any future Vn that is intended for Supabase remote)
 
 ### Requirement: Maven build with reproducible JDK 25 contract
 
-The system SHALL declare `java.version=25` and use `spring-boot-starter-parent:3.4.x` in `pom.xml`. The repository MUST ship Maven Wrapper (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/maven-wrapper.properties`) so contributors and CI run an identical Maven version. The command `./mvnw verify` MUST complete successfully on a clean checkout when Docker is available for Testcontainers.
+The system SHALL declare `java.version=25` and use `spring-boot-starter-parent:3.4.x` in `backend/pom.xml`. The repository MUST ship Maven Wrapper (`backend/mvnw`, `backend/mvnw.cmd`, `backend/.mvn/wrapper/maven-wrapper.properties`) so contributors and CI run an identical Maven version. The command `cd backend && ./mvnw verify` MUST complete successfully on a clean checkout when Docker is available for Testcontainers.
 
 #### Scenario: Maven verify succeeds on a clean checkout
 
-- **WHEN** a contributor clones the repository, ensures Docker is running, and executes `./mvnw verify`
-- **THEN** the command exits 0, all unit, contract, and integration tests pass, and the build artifact under `target/` is produced
+- **WHEN** a contributor clones the repository, ensures Docker is running, and executes `cd backend && ./mvnw verify`
+- **THEN** the command exits 0, all unit, contract, and integration tests pass, and the build artifact under `backend/target/` is produced
 
 #### Scenario: CI runs the build on JDK 25 Temurin
 
 - **WHEN** a pull request is opened against `main`
-- **THEN** GitHub Actions workflow `.github/workflows/ci.yml` runs on `ubuntu-latest` with `actions/setup-java@v4` configured for `distribution: temurin`, `java-version: 25`, executes `./mvnw verify`, and reports green
+- **THEN** GitHub Actions workflow `.github/workflows/ci.yml` runs on `ubuntu-latest` with `actions/setup-java@v4` configured for `distribution: temurin`, `java-version: 25`, executes `./mvnw verify` from `working-directory: backend`, and reports green
 
 ### Requirement: HikariCP connection pool sized for Supabase free tier
 
@@ -116,12 +116,12 @@ The system SHALL configure `spring.datasource.hikari.maximum-pool-size=5` in `ap
 
 ### Requirement: jOOQ dependency present but codegen gated
 
-The system SHALL include `org.jooq:jooq:3.19+` and the `org.postgresql:postgresql:42.7+` JDBC driver as runtime dependencies in `pom.xml`. The `jooq-codegen-maven` plugin SHALL be declared with execution `<phase>none</phase>` by default, activatable only via Maven profile `-P codegen`. This change MUST NOT produce generated jOOQ classes; that responsibility belongs to a later change.
+The system SHALL include `org.jooq:jooq:3.19+` and the `org.postgresql:postgresql:42.7+` JDBC driver as runtime dependencies in `backend/pom.xml`. The `jooq-codegen-maven` plugin SHALL be declared with execution `<phase>none</phase>` by default, activatable only via Maven profile `-P codegen`. This change MUST NOT produce generated jOOQ classes; that responsibility belongs to a later change.
 
 #### Scenario: Default Maven verify does not execute jOOQ codegen
 
-- **WHEN** the developer runs `./mvnw verify` without `-P codegen`
-- **THEN** the build does not invoke `jooq-codegen-maven`, no files are written to `target/generated-sources/jooq/`, and no Supabase remote connection is opened
+- **WHEN** the developer runs `cd backend && ./mvnw verify` without `-P codegen`
+- **THEN** the build does not invoke `jooq-codegen-maven`, no files are written to `backend/target/generated-sources/jooq/`, and no Supabase remote connection is opened
 
 ### Requirement: Environment variable contract documented
 
@@ -138,6 +138,6 @@ The system SHALL include a root `.gitignore` that excludes at minimum: `target/`
 
 #### Scenario: Build outputs and IDE files are ignored
 
-- **WHEN** the developer runs `./mvnw verify` and opens the project in IntelliJ IDEA
-- **THEN** `git status` reports no changes for `target/`, `.idea/`, or any generated artefacts
+- **WHEN** the developer runs `cd backend && ./mvnw verify` and opens the project in IntelliJ IDEA
+- **THEN** `git status` reports no changes for `backend/target/`, `.idea/`, or any generated artefacts
 

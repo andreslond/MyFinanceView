@@ -65,11 +65,11 @@ A canonical template file SHALL live at `openspec/templates/progress-template.md
 
 ### Requirement: Preflight script reports session-start repo state
 
-A PowerShell script at `scripts/preflight.ps1` SHALL produce a deterministic, structured report describing the current state of the repository when invoked. The report MUST include, in order, lines tagged `[OK]`, `[WARN]`, `[FAIL]`, or `[SKIP]` covering: number of active changes under `openspec/changes/` (excluding `archive/`); exit status of `./mvnw -q compile`; working tree cleanliness (`git status --porcelain` empty?); current branch name plus the last commit's short hash and subject; for each active change, presence of `proposal.md`, `design.md`, `tasks.md`, and `progress.md`; and the timestamp of the last verified Supabase backup if available. The script MUST exit 0 when no `[FAIL]` lines were emitted, non-zero otherwise. `[WARN]` lines SHALL NOT cause non-zero exit.
+A PowerShell script at `scripts/preflight.ps1` SHALL produce a deterministic, structured report describing the current state of the repository when invoked. The report MUST include, in order, lines tagged `[OK]`, `[WARN]`, `[FAIL]`, or `[SKIP]` covering: number of active changes under `openspec/changes/` (excluding `archive/`); exit status of `backend/mvnw -q compile`; working tree cleanliness (`git status --porcelain` empty?); current branch name plus the last commit's short hash and subject; for each active change, presence of `proposal.md`, `design.md`, `tasks.md`, and `progress.md`; and the timestamp of the last verified Supabase backup if available. The script MUST exit 0 when no `[FAIL]` lines were emitted, non-zero otherwise. `[WARN]` lines SHALL NOT cause non-zero exit.
 
 #### Scenario: Healthy repo with one active change
 
-- **WHEN** an operator runs `pwsh -File scripts/preflight.ps1` on a repo whose working tree is clean, whose `./mvnw -q compile` succeeds, and which has exactly one active change with all four required artefact files present
+- **WHEN** an operator runs `pwsh -File scripts/preflight.ps1` on a repo whose working tree is clean, whose `backend/mvnw -q compile` succeeds, and which has exactly one active change with all four required artefact files present
 - **THEN** the script prints one `[OK]` line per check, no `[WARN]`/`[FAIL]`/`[SKIP]` lines for the listed checks, and exits 0
 
 #### Scenario: Multiple active changes
@@ -79,7 +79,7 @@ A PowerShell script at `scripts/preflight.ps1` SHALL produce a deterministic, st
 
 #### Scenario: Build is broken
 
-- **WHEN** an operator runs `scripts/preflight.ps1` on a repo where `./mvnw -q compile` exits non-zero
+- **WHEN** an operator runs `scripts/preflight.ps1` on a repo where `backend/mvnw -q compile` exits non-zero
 - **THEN** the compile-status line is tagged `[FAIL]` with the captured stderr tail, the script continues running the remaining checks, and the script exits non-zero
 
 ### Requirement: Preflight degrades gracefully when optional tools are missing

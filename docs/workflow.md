@@ -26,7 +26,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1
 Preflight produces one line per check tagged `[OK]` / `[WARN]` / `[FAIL]` / `[SKIP]`, then a single summary line. It covers:
 
 - number of active changes under `openspec/changes/` (excluding `archive/`)
-- `./mvnw -q compile` exit status (fast compile, NOT verify — see [base-standards.md §5](base-standards.md#5-quality-bar))
+- `backend/mvnw -q compile` exit status (fast compile, NOT verify — see [base-standards.md §5](base-standards.md#5-quality-bar))
 - working tree cleanliness (`git status --porcelain`)
 - current branch + last commit (informational)
 - per-active-change presence of `proposal.md`, `design.md`, `tasks.md`, `progress.md`

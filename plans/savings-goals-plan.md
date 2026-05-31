@@ -145,7 +145,7 @@ Política idéntica a la de `accounts` / `transactions`: el usuario solo lee/esc
 - Policy: el dueño puede leer/escribir su propio prefijo (`storage.foldername(name)[1] = auth.uid()::text`).
 
 ### 3.4 Migración
-- Archivo: `database/migrations/V004__savings_goals.sql` (continúa la numeración existente V001–V003).
+- Archivo: `backend/database/migrations/V004__savings_goals.sql` (continúa la numeración existente V001–V003).
 - Incluir DDL + RLS + policies de Storage.
 
 ---

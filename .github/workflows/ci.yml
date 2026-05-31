@@ -38,6 +38,8 @@ jobs:
 
       - name: Verify Maven Wrapper is executable
         run: chmod +x ./mvnw
+        working-directory: backend
 
       - name: Build and run tests
         run: ./mvnw -B verify
+        working-directory: backend
