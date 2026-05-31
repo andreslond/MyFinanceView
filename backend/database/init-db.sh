@@ -7,13 +7,13 @@
 # on first container start (when the data dir is empty).
 #
 # Two-phase init keeps local-only Supabase compatibility stubs OUT of the
-# `database/migrations/` folder that future Flyway adoption (TASK-DB-06)
+# `backend/database/migrations/` folder that future Flyway adoption (TASK-DB-06)
 # will manage:
 #
-#   1. database/local/V000__local_supabase_stubs.sql  ← local + Testcontainers only
-#   2. database/migrations/V001..V003                  ← real schema, applied to Supabase too
+#   1. backend/database/local/V000__local_supabase_stubs.sql  ← local + Testcontainers only
+#   2. backend/database/migrations/V001..V003                  ← real schema, applied to Supabase too
 #
-# Future Flyway baseline points at `database/migrations/` only. The local
+# Future Flyway baseline points at `backend/database/migrations/` only. The local
 # folder stays invisible to it.
 # =====================================================================
 
