@@ -10,6 +10,24 @@
 
 See [SPEC.md](SPEC.md) for the full vision.
 
+## Repository layout (monorepo)
+
+```
+myfinance-view/
+├── backend/      ← Java/Spring Boot — pom.xml, mvnw, src/, database/
+├── frontend/     ← Placeholder for React 19 + Vite + TS (Épica 3, not yet started)
+├── docker/       ← docker-compose.yml (mounts ../backend/database/*)
+├── docs/         ← Cross-cutting standards + api-spec.yml + design/
+├── openspec/     ← Spec-driven workflow (changes/, specs/, archive)
+├── plans/        ← Per-feature plans (e.g. savings-goals-plan.md)
+├── scripts/      ← preflight.ps1 and cross-cutting helpers
+├── .claude/      ← Agents, skills, commands, worktrees
+├── .github/      ← CI (working-directory: backend)
+└── SPEC.md, CLAUDE.md
+```
+
+All Maven commands run from `backend/`. Canonical structure: [SPEC.md §3.1](SPEC.md). Rationale for the move: [plans/2026-05-31-monorepo-restructure-design.md](plans/2026-05-31-monorepo-restructure-design.md).
+
 ## Source-of-truth hierarchy (read in this order when in doubt)
 
 1. **[SPEC.md](SPEC.md)** — project north star: vision, stack, key decisions.
@@ -21,7 +39,7 @@ See [SPEC.md](SPEC.md) for the full vision.
    - [documentation-standards.md](docs/documentation-standards.md) — what doc goes where
    - [frontend-standards.md](docs/frontend-standards.md) — placeholder for React
    - [api-spec.yml](docs/api-spec.yml) — OpenAPI contract (canonical)
-3. **[plans/](plans/)** — per-feature plans (current: `savings-goals-plan.md`).
+3. **[plans/](plans/)** — per-feature plans and design notes (e.g. `savings-goals-plan.md`, `2026-05-31-monorepo-restructure-design.md`).
 4. **[openspec/](openspec/)** — per-change artifacts:
    - `changes/<id>/` — active proposals (proposal.md, design.md, specs/, tasks.md)
    - `specs/<capability>/` — canonical capability specs
