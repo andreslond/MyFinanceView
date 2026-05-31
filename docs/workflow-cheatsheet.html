@@ -295,16 +295,18 @@
 <nav class="toc">
   <h2>Workflow</h2>
   <ol>
-    <li><a href="#timeline">1. Timeline</a></li>
-    <li><a href="#gates">2. Los 4 Gates</a></li>
+    <li><a href="#session-start">0. Sesión start</a></li>
+    <li><a href="#roles">1. Líder &amp; subagentes</a></li>
+    <li><a href="#timeline">2. Timeline</a></li>
+    <li><a href="#gates">3. Los 4 Gates</a></li>
     <li><a href="#gate-a" class="gate-link">&nbsp;&nbsp;Gate A — Arquitectura</a></li>
     <li><a href="#gate-b" class="gate-link">&nbsp;&nbsp;Gate B — Plan tareas</a></li>
     <li><a href="#gate-d" class="gate-link">&nbsp;&nbsp;Gate D — Implementar</a></li>
     <li><a href="#gate-c" class="gate-link">&nbsp;&nbsp;Gate C — Triage findings</a></li>
-    <li><a href="#findings">3. Severidad findings</a></li>
-    <li><a href="#async">4. Async / paralelo</a></li>
-    <li><a href="#commands">5. Comandos</a></li>
-    <li><a href="#interrupt">6. Cuándo interrumpir</a></li>
+    <li><a href="#findings">4. Severidad findings</a></li>
+    <li><a href="#async">5. Async / paralelo</a></li>
+    <li><a href="#commands">6. Comandos &amp; artefactos</a></li>
+    <li><a href="#interrupt">7. Cuándo interrumpir</a></li>
   </ol>
 </nav>
 
@@ -315,12 +317,154 @@
   <div class="sub">Manual visual para tener abierto en otra ventana durante una sesión de Claude Code.</div>
   <div class="meta">
     Fuente canónica textual: <a href="workflow.md"><code>docs/workflow.md</code></a> &nbsp;·&nbsp;
-    Última actualización: 2026-05-21
+    Última actualización: 2026-05-31
+  </div>
+  <div class="callout" style="margin-top: 18px;">
+    <strong>Nuevo desde 2026-05-27 (<code>harness-progress-tracking</code>):</strong>
+    sesión start con <code>scripts/preflight.ps1</code> agent-invoked (no hay <em>SessionStart hook</em>, se revirtió en Decision 5 v2),
+    <code>progress.md</code> por change como anchor cross-compaction, y Gate D paso&nbsp;0 obligatorio: leer <code>progress.md</code> y postear "resuming from" antes del primer spawn.
+    Ver <a href="../openspec/changes/archive/2026-05-27-harness-progress-tracking/design.md"><code>openspec/changes/archive/2026-05-27-harness-progress-tracking/design.md</code></a> para la rationale completa.
+  </div>
+  <div class="callout" style="margin-top: 12px;">
+    <strong>Nuevo desde 2026-05-31 (monorepo restructure):</strong>
+    todo el código backend vive bajo <code>backend/</code> (<code>backend/pom.xml</code>, <code>backend/mvnw</code>, <code>backend/src/</code>, <code>backend/database/</code>). La raíz queda libre para un futuro <code>frontend/</code>.
+    Maven corre desde <code>backend/</code>; preflight invoca <code>backend/mvnw -q compile</code>. <code>TOMORROW.md</code> fue eliminado del repo — el handoff cross-sesión ahora vive 100% en <code>progress.md</code>.
+    Ver <a href="../plans/2026-05-31-monorepo-restructure-design.md"><code>plans/2026-05-31-monorepo-restructure-design.md</code></a>.
   </div>
 </header>
 
+<section id="session-start">
+  <h2>0. Sesión start — antes de cualquier trabajo no trivial</h2>
+  <p style="color: var(--muted); font-size: 13px;">
+    Antes de un <code>/opsx:apply</code>, un edit de código, una decisión arquitectónica o un commit, el agente invoca <code>scripts/preflight.ps1</code> y reporta el output al operador <em>en chat</em>.
+    Sesiones triviales (preguntas, exploración) pueden saltarlo — juicio del agente.
+    <strong>No hay <code>SessionStart</code> hook</strong>: se instaló en v1 y se revirtió tras dogfooding (overhead per-sesión, output invisible al operador, escapes cross-shell frágiles).
+  </p>
+
+  <pre>powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1</pre>
+
+  <h3>Las 6 chequeos de preflight</h3>
+  <table>
+    <thead>
+      <tr><th>#</th><th>Check</th><th>Tag típico</th><th>Notas</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td><td>Active changes count</td><td><code>[OK]</code> 0–1, <code>[WARN]</code> &gt;1</td>
+        <td>Cuenta dirs en <code>openspec/changes/</code> excluyendo <code>archive/</code></td>
+      </tr>
+      <tr>
+        <td>2</td><td><code>backend/mvnw -q compile</code></td><td><code>[OK]</code> / <code>[FAIL]</code></td>
+        <td>Fast compile, NO verify. Si falla, el agente debe parar y preguntar.</td>
+      </tr>
+      <tr>
+        <td>3</td><td>Working tree cleanliness</td><td><code>[OK]</code> / <code>[WARN]</code></td>
+        <td><code>git status --porcelain</code>. Sucio es WARN, no FAIL.</td>
+      </tr>
+      <tr>
+        <td>4</td><td>Branch + last commit</td><td><code>[OK]</code> informativo</td>
+        <td>Solo contexto, nunca falla.</td>
+      </tr>
+      <tr>
+        <td>5</td><td>Artefactos por change</td><td><code>[OK]</code> / <code>[FAIL]</code></td>
+        <td>Verifica presencia de <code>proposal.md</code>, <code>design.md</code>, <code>tasks.md</code>, <code>progress.md</code> en cada active change.</td>
+      </tr>
+      <tr>
+        <td>6</td><td>Supabase backup freshness</td><td><code>[OK]</code> / <code>[WARN]</code> / <code>[SKIP]</code></td>
+        <td>Lee <code>r2:my-finance-view-backups/status/last-success.json</code> con <code>rclone</code>; <code>[SKIP]</code> si no instalado.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <strong>Semántica de exit code:</strong> <code>exit = número de [FAIL]</code>. <code>[WARN]</code> y <code>[SKIP]</code> no fallan.
+    Un <code>[FAIL] mvn compile failed</code> obliga al agente a parar y preguntar al operador antes de empezar <code>/opsx:apply</code>.
+  </div>
+
+  <h3>El otro artefacto nuevo — <code>progress.md</code></h3>
+  <p style="color: var(--muted); font-size: 13px;">
+    Cada <code>openspec/changes/&lt;id&gt;/</code> carga un <code>progress.md</code> en YAML (6 keys) que el subagente <code>backend-developer</code> reescribe al cerrar cada tarea.
+    Es el anchor que sobrevive a compaction: la próxima sesión lo lee y reconstruye contexto en una sola <code>Read</code>.
+  </p>
+  <pre># progress.md — schema v1 (YAML)
+current_task: "3.2"
+last_completed: "3.1"
+next_step: "implementar AuthFilter unit test antes de wiring"
+decisions_pending_design_update: []
+blockers: []
+last_updated: "2026-05-31T14:23:00Z"</pre>
+  <ul style="font-size: 13px;">
+    <li><strong>Cadencia:</strong> per-task, NO per-tool-call (Decision 2 del design).</li>
+    <li><strong>Authority split:</strong> <code>tasks.md</code> checkboxes = "qué está hecho"; <code>progress.md</code> = "qué hacer next + decisiones mid-flight".</li>
+    <li><strong>Staleness:</strong> si <code>last_updated &lt; HEAD</code>, <code>adversarial-reviewer</code> emite Minor finding <code>process-tooling</code>.</li>
+    <li><strong>Recovery:</strong> si falta, <code>/opsx:apply</code> lo crea desde <code>openspec/templates/progress-template.md</code> y loguea <code>[recovered missing progress.md]</code>.</li>
+  </ul>
+</section>
+
+<section id="roles">
+  <h2>1. Líder &amp; subagentes — quién hace qué</h2>
+  <p style="color: var(--muted); font-size: 13px;">
+    El <strong>líder</strong> es el hilo principal de Claude en el contexto principal. <strong>Orquesta — no implementa.</strong>
+    Toda escritura de código Java pasa por un subagente. Esta separación es la que permite resúmenes de contexto manejables y trabajo paralelo seguro.
+  </p>
+
+  <div class="gate-cards">
+    <div class="gate-card" style="border-left-color: var(--phase);">
+      <h3 style="color: var(--phase);">El líder (hilo principal)</h3>
+      <div class="fires">Modelo: Opus 4.7 — vive todo el ciclo</div>
+      <ul>
+        <li>Corre <code>preflight.ps1</code> al inicio de sesiones no triviales.</li>
+        <li>Maneja los 4 gates (A/B/D/C) — <strong>una decisión a la vez</strong> vía <code>AskUserQuestion</code>.</li>
+        <li>Lee <code>progress.md</code> en Gate D paso 0 y postea "resuming from".</li>
+        <li>Triage findings adversariales contra el threat model.</li>
+        <li>Spawn subagentes con el modelo, batch y modo (async / worktree) correctos.</li>
+        <li>Cierra con <code>/commit</code> → <code>/opsx:archive</code> → <code>/openspec-sync-specs</code> → <code>/update-docs</code>.</li>
+      </ul>
+    </div>
+
+    <div class="gate-card" style="border-left-color: var(--async);">
+      <h3 style="color: var(--async);">backend-developer</h3>
+      <div class="fires">Modelo: Sonnet 4.6 (pinned) — vive durante Fase 5</div>
+      <ul>
+        <li>Implementa tasks de <code>tasks.md</code> con TDD por tarea.</li>
+        <li><strong>Reescribe <code>progress.md</code> al cerrar cada tarea</strong> — refresca <code>last_updated</code>, mueve <code>current_task</code>, marca <code>blockers</code> si surge alguno.</li>
+        <li>Conoce el modular-monolith-by-domain, jOOQ over JPA, <code>BigDecimal HALF_EVEN</code>, ProblemDetail, Testcontainers.</li>
+        <li>Rechaza CleanArch-by-layers, hexagonal maximalist, CQRS, JPA, WebFlux.</li>
+        <li>Mirror de la directiva preflight en su definición — corre <code>preflight.ps1</code> al inicio de su propia sesión.</li>
+      </ul>
+    </div>
+
+    <div class="gate-card" style="border-left-color: var(--gate);">
+      <h3 style="color: var(--gate);">adversarial-reviewer</h3>
+      <div class="fires">Modelo: heredado — vive durante Fase 6</div>
+      <ul>
+        <li>Red-team aislado del change antes de merge.</li>
+        <li>Output: <strong>archivo</strong> markdown (<code>adversarial-review.md</code>), terse stdout.</li>
+        <li>Severidad <code>Blocker</code> / <code>Major</code> / <code>Minor</code> / <code>Question</code>.</li>
+        <li>Briefed con el threat model verbatim de <code>proposal.md</code>.</li>
+        <li>Checks específicos: <code>progress.md</code> staleness, missing-preflight evidence → Minor <code>process-tooling</code>.</li>
+      </ul>
+    </div>
+
+    <div class="gate-card" style="border-left-color: var(--warn);">
+      <h3 style="color: var(--warn);">Otros subagentes (on-demand)</h3>
+      <div class="fires">Modelo: variable — vive durante una fase específica</div>
+      <ul>
+        <li><code>code-auditor</code> — milestone-level audit, end-of-épica.</li>
+        <li><code>product-strategy-analyst</code> — ideación / value-prop antes de <code>/enrich-us</code>.</li>
+        <li><code>Explore</code> / <code>general-purpose</code> — research fan-out en Fase 2.</li>
+        <li><code>frontend-developer</code> — placeholder, INACTIVE hasta que arranque el frontend.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Regla de oro:</strong> si pides "actúa como backend-developer", el líder DEBE spawnear el subagente — nunca rolear en main context. Esto está fijado en <code>CLAUDE.md</code> y en la memoria <code>feedback-opsx-apply-via-backend-developer</code>.
+  </div>
+</section>
+
 <section id="timeline">
-  <h2>1. Timeline — 8 fases, 4 gates</h2>
+  <h2>2. Timeline — 8 fases, 4 gates</h2>
   <p style="color: var(--muted); font-size: 13px;">
     Cada fase azul es trabajo del agente. Cada barra roja es un <strong>gate HITL obligatorio</strong>: Claude se detiene hasta que el operador da OK explícito.
   </p>
@@ -390,10 +534,17 @@
   <div class="callout">
     <strong>Por qué A → B → D → C:</strong> los letters son estables (para cross-reference); el orden por fase es A (3), B (4), D (5), C (6). C dispara después de D porque la review es post-implementación.
   </div>
+
+  <div class="callout" style="border-left-color: var(--warn); background: var(--warn-bg);">
+    <strong>Excepción — commit-directo sin OpenSpec:</strong>
+    refactors mecánicos sin design decisions (ej. <code>git mv</code> masivo, rename de paquetes, path updates en docs/CI) saltan el flujo OpenSpec.
+    Patrón: <em>design doc en <code>plans/&lt;YYYY-MM-DD&gt;-&lt;slug&gt;.md</code> como commit 0 → commits temáticos en branch → PR</em>. Los gates A/B/D/C no aplican porque no hay spec que debatir; el design doc + PR description proveen el audit trail.
+    Precedente: <a href="../plans/2026-05-31-monorepo-restructure-design.md"><code>monorepo-restructure</code></a> (2026-05-31). Si dudas si tu trabajo califica, asume que SÍ requiere OpenSpec y deja que el operador te redirija.
+  </div>
 </section>
 
 <section id="gates">
-  <h2>2. Los 4 Gates en detalle</h2>
+  <h2>3. Los 4 Gates en detalle</h2>
   <div class="gate-cards">
 
     <div class="gate-card" id="gate-a">
@@ -438,13 +589,17 @@
       <div class="fires">Fires: entre <code>tasks.md</code> completo y el primer spawn de <code>backend-developer</code></div>
       <div class="role role-claude">Claude hace</div>
       <ul>
+        <li><strong>Paso 0 (nuevo desde 2026-05-27):</strong> lee <code>openspec/changes/&lt;id&gt;/progress.md</code> y postea un párrafo "resuming from" citando <code>current_task</code>, <code>next_step</code>, y cualquier <code>decisions_pending_design_update</code> o <code>blockers</code> no vacíos.</li>
+        <li>Si <code>last_updated &lt; HEAD commit timestamp</code>, marca staleness explícitamente: <code>WARNING: progress.md last updated &lt;T1&gt; but most recent commit is &lt;T2&gt;</code>.</li>
+        <li>Si <code>progress.md</code> no existe, lo crea desde <code>openspec/templates/progress-template.md</code> y loguea <code>[recovered missing progress.md]</code>.</li>
         <li>Confirma: "Voy a spawn <code>backend-developer</code> en Sonnet 4.6 para tasks X.Y → X.Z. Async o secuencial?"</li>
-        <li>Nombra cada subagente que va a spawn y el rango de tasks</li>
-        <li>Surfaces los manual prereqs del operador (ej: "task 1.2 — tienes que correr <code>age-keygen</code> antes")</li>
+        <li>Nombra cada subagente que va a spawn y el rango de tasks.</li>
+        <li>Surfaces los manual prereqs del operador (ej: "task 1.2 — tienes que correr <code>age-keygen</code> antes").</li>
       </ul>
       <div class="role role-operator">Operador hace</div>
       <ul>
-        <li>Confirma, redirecciona (otro subagente, otro modelo), o pide splittear el apply en batches</li>
+        <li>Confirma, redirecciona (otro subagente, otro modelo), o pide splittear el apply en batches.</li>
+        <li>Si el "resuming from" no cuadra con su modelo mental, corrige antes de dar "go".</li>
       </ul>
       <div class="pass">
         <strong>Pasa cuando:</strong> operador dice "go".
@@ -473,7 +628,7 @@
 </section>
 
 <section id="findings">
-  <h2>3. Severidad de findings — política de triage</h2>
+  <h2>4. Severidad de findings — política de triage</h2>
   <table>
     <thead>
       <tr><th>Severidad</th><th>Default action</th><th>Operador OK necesario?</th></tr>
@@ -514,7 +669,7 @@ Out of scope: local forensic adversary with physical disk access
 </section>
 
 <section id="async">
-  <h2>4. Async / paralelo — cuándo aprovechar subagentes en paralelo</h2>
+  <h2>5. Async / paralelo — cuándo aprovechar subagentes en paralelo</h2>
   <p style="color: var(--muted); font-size: 13px;">
     Paralelo ≠ más barato. 3 subagentes 5 min = 3× tokens de 1 subagente 5 min. Paralelo compra <strong>wall-clock cuando estás bloqueado</strong>, no presupuesto. Default: <strong>secuencial</strong>. Opt-in a paralelo en Gate D.
   </p>
@@ -551,11 +706,11 @@ Out of scope: local forensic adversary with physical disk access
 </section>
 
 <section id="commands">
-  <h2>5. Cheat-sheet de comandos</h2>
+  <h2>6. Cheat-sheet de comandos &amp; artefactos</h2>
   <table>
     <thead>
       <tr>
-        <th>Comando</th>
+        <th>Comando / artefacto</th>
         <th>Fase</th>
         <th>Qué hace</th>
         <th>Output</th>
@@ -563,6 +718,20 @@ Out of scope: local forensic adversary with physical disk access
       </tr>
     </thead>
     <tbody>
+      <tr>
+        <td><code>scripts/preflight.ps1</code></td>
+        <td>0</td>
+        <td>Reporte determinista de salud del repo: active changes, compile, working tree, branch, artefactos, backup freshness</td>
+        <td>6 líneas <code>[OK]/[WARN]/[FAIL]/[SKIP]</code> + resumen; exit = nº de FAIL</td>
+        <td>— (informativo)</td>
+      </tr>
+      <tr>
+        <td><code>progress.md</code> (por change)</td>
+        <td>3–8</td>
+        <td>YAML con 6 keys; anchor cross-compaction. Subagente lo reescribe per-task.</td>
+        <td>Archivo en <code>openspec/changes/&lt;id&gt;/</code></td>
+        <td>Leído al entrar <strong style="color: var(--gate)">D</strong></td>
+      </tr>
       <tr>
         <td><code>/enrich-us</code></td>
         <td>1</td>
@@ -631,16 +800,19 @@ Out of scope: local forensic adversary with physical disk access
 </section>
 
 <section id="interrupt">
-  <h2>6. Cuándo interrumpir</h2>
+  <h2>7. Cuándo interrumpir</h2>
   <div class="interrupt">
     <strong>Si Claude no se detiene en un gate, interrúmpelo y dilo.</strong><br><br>
     Los gates son el contrato. Saltarse uno sin OK del operador es un bug del proceso, no una feature.
     Frases útiles:
     <ul>
+      <li>"Corre <code>preflight.ps1</code> antes de tocar nada." (Sesión start)</li>
+      <li>"Antes de spawn, postea el resuming-from del <code>progress.md</code>." (Gate D paso 0)</li>
       <li>"Espera — antes de design.md, lista las decisiones abiertas." (Gate A)</li>
       <li>"Antes de tasks.md, muéstrame el plan en bullets." (Gate B)</li>
       <li>"No spawnees backend-developer todavía — confirma el batch primero." (Gate D)</li>
       <li>"Findings: dame solo las excepciones a la política default." (Gate C)</li>
+      <li>"No implementes en main context — spawn el subagente." (regla líder vs subagentes)</li>
     </ul>
   </div>
 </section>
