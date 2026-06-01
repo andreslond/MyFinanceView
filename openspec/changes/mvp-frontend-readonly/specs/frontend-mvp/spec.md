@@ -1,0 +1,165 @@
+## ADDED Requirements
+
+### Requirement: Frontend stack and runtime
+
+El sistema SHALL desplegar una aplicación SPA construida con Vite, React 19, TypeScript en modo strict y Tailwind CSS, alojada en la carpeta `frontend/` del monorepo y publicada en Vercel como un único proyecto independiente del backend Java.
+
+#### Scenario: Build reproducible
+- **WHEN** un agente ejecuta `npm install && npm run build` desde `frontend/`
+- **THEN** la build de Vite produce un bundle en `frontend/dist/` sin errores y sin warnings tipados como críticos por TypeScript
+
+#### Scenario: TypeScript strict
+- **WHEN** se compila el proyecto
+- **THEN** `tsc --noEmit` pasa con `"strict": true`, `"noUncheckedIndexedAccess": true` y `"noImplicitOverride": true`
+
+#### Scenario: Tailwind configurado
+- **WHEN** una pantalla aplica una clase utilitaria de Tailwind (ej. `bg-neutral-900`)
+- **THEN** el estilo se aplica en el bundle final sin necesidad de configuración adicional por archivo
+
+### Requirement: Authentication via Supabase Auth
+
+El sistema SHALL delegar autenticación completamente a Supabase Auth (email/password y magic link) y mantener la sesión activa en el cliente con refresh automático. El JWT emitido por Supabase SHALL acompañar cada query a PostgREST.
+
+#### Scenario: Login con email/password exitoso
+- **WHEN** el usuario ingresa credenciales válidas en el formulario de login
+- **THEN** Supabase emite un JWT, la sesión se persiste en almacenamiento local, y el usuario es redirigido a la ruta protegida por defecto (`/transactions`)
+
+#### Scenario: Login con magic link
+- **WHEN** el usuario solicita un magic link a un email registrado
+- **THEN** Supabase envía el correo de autenticación y, al hacer clic en el enlace, el usuario aterriza autenticado en la ruta protegida por defecto
+
+#### Scenario: Acceso sin sesión
+- **WHEN** un agente no autenticado intenta acceder a cualquier ruta distinta de `/login`
+- **THEN** el sistema redirige a `/login` sin exponer datos protegidos
+
+#### Scenario: Refresh automático
+- **WHEN** el JWT está próximo a expirar
+- **THEN** `supabase-js` renueva la sesión de forma transparente y las queries en curso no fallan por expiración
+
+#### Scenario: Logout
+- **WHEN** el usuario invoca logout
+- **THEN** la sesión se limpia del almacenamiento, las queries activas se cancelan, y el usuario aterriza en `/login`
+
+### Requirement: Forward-compatible data access layer
+
+El sistema SHALL aislar toda interacción con `@supabase/supabase-js` en un único cliente (`src/lib/supabaseClient.ts`) y en una capa de servicios (`src/services/<entity>Service.ts`). Los componentes, pantallas y hooks de React Query SHALL consumir exclusivamente los métodos públicos de los services. Esta capa garantiza que la migración futura al backend Java REST consista en reemplazar el cuerpo de los services sin tocar componentes ni hooks.
+
+#### Scenario: Componentes no importan `supabase-js` directo
+- **WHEN** un test estático (Vitest + glob sobre `src/`) busca importaciones de `@supabase/supabase-js`
+- **THEN** el test sólo encuentra coincidencias dentro de `src/lib/supabaseClient.ts` y archivos bajo `src/services/`; cualquier otra coincidencia falla la build
+
+#### Scenario: ESLint refuerza el aislamiento
+- **WHEN** un agente intenta importar `@supabase/supabase-js` desde un archivo bajo `src/pages/` o `src/components/`
+- **THEN** `eslint` reporta un error vía la regla `no-restricted-imports` configurada en el proyecto
+
+#### Scenario: Services exponen DTOs en formato API-spec
+- **WHEN** un service retorna una transacción
+- **THEN** el objeto tiene campos en camelCase (`occurredAt`, `categoryId`, `categoryConfirmed`), fechas como ISO 8601 strings y montos como string (no `number`)
+
+#### Scenario: Hooks de React Query sobre services
+- **WHEN** una pantalla necesita listar transacciones
+- **THEN** la pantalla invoca un hook `useTransactions(filters)` que internamente llama a `transactionsService.list(filters)` y usa React Query para caché/loading/error
+
+### Requirement: Transactions listing screen
+
+El sistema SHALL exponer una pantalla `/transactions` que liste las transacciones del usuario autenticado, ordenadas por `occurredAt` descendente, con paginación servidor-side y filtros por cuenta, categoría y estado de confirmación. El estado de los filtros SHALL reflejarse en query params de la URL para que los links sean compartibles.
+
+#### Scenario: Lista por defecto
+- **WHEN** un usuario autenticado abre `/transactions`
+- **THEN** la pantalla muestra sus transacciones más recientes (página 1, tamaño por defecto 25) ordenadas por `occurredAt DESC`
+
+#### Scenario: Filtro por cuenta
+- **WHEN** el usuario selecciona una cuenta del dropdown
+- **THEN** la URL incluye `?accountId=<uuid>`, la lista se actualiza para mostrar sólo transacciones de esa cuenta, y la paginación se reinicia a página 1
+
+#### Scenario: Filtro por categorías múltiples
+- **WHEN** el usuario selecciona dos o más categorías
+- **THEN** la URL incluye `?categoryIds=<uuid1>,<uuid2>` y la lista incluye sólo transacciones que matchean cualquiera de las categorías seleccionadas
+
+#### Scenario: Filtro por estado de confirmación
+- **WHEN** el usuario activa el filtro "pendientes"
+- **THEN** la URL incluye `?confirmed=false` y la lista muestra sólo transacciones con `categoryConfirmed = false`
+
+#### Scenario: Link compartible
+- **WHEN** el usuario copia la URL con filtros aplicados y la pega en otra pestaña autenticada
+- **THEN** la lista se renderiza con los mismos filtros y los mismos resultados (a igualdad de datos)
+
+#### Scenario: Paginación
+- **WHEN** el usuario navega a la página 2
+- **THEN** la URL incluye `?page=2`, la lista muestra el siguiente bloque de resultados, y los filtros activos se preservan
+
+#### Scenario: Sin resultados
+- **WHEN** los filtros activos no matchean ninguna transacción del usuario
+- **THEN** la pantalla muestra un estado vacío explícito ("Sin transacciones para estos filtros") en lugar de una tabla vacía
+
+### Requirement: Category change modal
+
+El sistema SHALL permitir cambiar la categoría de una transacción mediante un modal lanzado desde una fila de la lista. La operación SHALL marcar la transacción como confirmada (`categoryConfirmed = true`) y disparar el feedback loop a `myfinance.merchants` a través del trigger Postgres del capability `myfinance-data-policies`.
+
+#### Scenario: Apertura del modal
+- **WHEN** el usuario hace clic en el control "cambiar categoría" de una fila
+- **THEN** se abre un modal con la transacción contextual visible (descripción, monto, fecha) y un dropdown poblado con las categorías disponibles ordenadas por `displayName` ascendente
+
+#### Scenario: Confirmación exitosa
+- **WHEN** el usuario selecciona una categoría distinta y pulsa "Confirmar"
+- **THEN** la pantalla emite un UPDATE a `myfinance.transactions` que setea `categoryId` y `categoryConfirmed = true`, recibe la fila actualizada, cierra el modal con feedback visual de éxito, y la lista subyacente se refresca via React Query invalidation
+
+#### Scenario: Confirmación sin cambio
+- **WHEN** el usuario abre el modal y pulsa "Confirmar" sin cambiar la categoría seleccionada actualmente
+- **THEN** la operación setea `categoryConfirmed = true` (si no lo estaba), refresca la lista y cierra el modal — y el trigger Postgres se dispara igual porque la confirmación es la transición relevante
+
+#### Scenario: Error de red
+- **WHEN** el UPDATE falla por red u otro error de Supabase
+- **THEN** el modal permanece abierto, muestra un mensaje de error legible, conserva la selección del usuario y permite reintentar
+
+#### Scenario: Cancelación
+- **WHEN** el usuario cierra el modal sin pulsar "Confirmar"
+- **THEN** la transacción permanece sin cambios y la lista no se refresca
+
+### Requirement: Categories display in Spanish
+
+El sistema SHALL mostrar las categorías por su `displayName` (español). Si una categoría no tiene `displayName` poblado, el sistema SHALL caer atrás al `name` técnico en inglés para no quedarse en blanco.
+
+#### Scenario: Display normal
+- **WHEN** una categoría tiene `displayName = "Restaurantes y Cafés"`
+- **THEN** todas las superficies UI (badge en la lista, dropdown del modal, filtros) muestran "Restaurantes y Cafés"
+
+#### Scenario: Fallback
+- **WHEN** una categoría tiene `displayName` null o vacío
+- **THEN** la UI muestra el `name` (ej. "Dining Out") y registra una advertencia en consola para que el operador la pueble (cierra TASK-DB-01)
+
+### Requirement: Vercel deployment
+
+El sistema SHALL estar desplegado en Vercel como un proyecto vinculado al monorepo con root directory `frontend/`. Las variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` SHALL estar configuradas en el ambiente de producción de Vercel.
+
+#### Scenario: Build en Vercel
+- **WHEN** se hace push a `main` con cambios en `frontend/**`
+- **THEN** Vercel detecta el cambio, ejecuta `npm install && npm run build` con root `frontend/`, y publica el bundle en la URL productiva
+
+#### Scenario: Variables de entorno
+- **WHEN** el bundle de producción inicia
+- **THEN** `import.meta.env.VITE_SUPABASE_URL` y `import.meta.env.VITE_SUPABASE_ANON_KEY` están definidas y apuntan al proyecto Supabase productivo (`akkoqdjmmozyqdfjkabg`)
+
+#### Scenario: Smoke test post-deploy
+- **WHEN** un curl a la URL productiva pide la raíz
+- **THEN** el servidor responde HTTP 200 con el `index.html` de Vite
+
+### Requirement: Frontend never aggregates money
+
+El frontend NEVER SHALL computar agregaciones monetarias (sumas, promedios, totales por período, proyecciones). Cualquier número agregado mostrado SHALL provenir de una vista o función SQL en Supabase, o (en el futuro) de un endpoint del backend Java.
+
+#### Scenario: Lista sin total computado
+- **WHEN** la pantalla de transacciones renderiza una página de resultados
+- **THEN** la UI no muestra un "total de la página" ni un "total filtrado" computado en JavaScript — sólo las filas individuales con sus montos
+
+#### Scenario: Total exigido por producto
+- **WHEN** producto pide un total (no en este MVP, pero como guardrail)
+- **THEN** el equipo crea una vista SQL en Supabase (`myfinance.v_*`) y el service la consume; el frontend nunca usa `.reduce()` sobre montos
+
+### Requirement: Documented agent rules
+
+El repositorio SHALL incluir `frontend/AGENTS.md` documentando: la regla de aislamiento de `supabase-js`, la prohibición de agregaciones monetarias en frontend, la estructura `lib/services/hooks/pages` esperada, y el mapeo de DTOs a `api-spec.yml`. Estas reglas SHALL ser legibles por cualquier agente que entre al folder.
+
+#### Scenario: Agente lee `frontend/AGENTS.md`
+- **WHEN** un agente nuevo abre `frontend/` por primera vez
+- **THEN** encuentra `AGENTS.md` con las reglas operativas resumidas y links a los specs/standards relevantes
