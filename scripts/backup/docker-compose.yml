@@ -1,0 +1,55 @@
+# docker-compose.yml — myfinance-backup-runner sidecar service.
+#
+# Usage (from repo root on the VPS):
+#   docker compose -f n8n/docker-compose.yml -f scripts/backup/docker-compose.yml \
+#     up -d myfinance-backup-runner
+#
+# IMPORTANT: n8n_net must already exist (created by n8n's compose project).
+# Verify with: docker network ls | grep n8n_net
+# If the name differs, override the networks block to match.
+
+services:
+  myfinance-backup-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.runner
+    image: myfinance-backup-runner:latest
+    restart: unless-stopped
+
+    # Runtime secrets / config (gitignored on VPS; never committed)
+    env_file:
+      - ./.env.local
+
+    # Resource limits — the runner is I/O-bound (pg_dump + rclone), not CPU-hungry.
+    # 256 MB is ample for the Node server + bash workers + rclone overhead.
+    mem_limit: 256m
+
+    # NO host port published — the runner is internal-only.
+    # n8n reaches it at http://myfinance-backup-runner:8080 on the shared network.
+
+    networks:
+      - n8n_net
+
+    volumes:
+      # Persistent runner state: status JSON, logs, working directory.
+      # The operator must create this directory on the VPS before first run:
+      #   mkdir -p /var/lib/myfinance-backup
+      - /var/lib/myfinance-backup:/var/lib/myfinance-backup
+
+      # Docker socket — required so workers can spawn the ephemeral
+      # postgres:17 verify container (verify-restore.sh).
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    # Ephemeral tmpfs for verify working directory.
+    # Lives at a SIBLING path (/var/lib/myfinance-verify, NOT nested under
+    # /var/lib/myfinance-backup) to avoid Docker nested-mount edge cases.
+    # Plaintext decrypted snapshots exist ONLY here — they never touch disk.
+    # Workers MUST NOT call mount/umount — no CAP_SYS_ADMIN needed.
+    tmpfs:
+      - /var/lib/myfinance-verify:size=512m,mode=0700
+
+# The n8n_net network is created by the n8n compose project; declare as
+# external so Docker Compose joins it rather than creating a new one.
+networks:
+  n8n_net:
+    external: true

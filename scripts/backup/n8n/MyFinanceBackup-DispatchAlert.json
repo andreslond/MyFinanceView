@@ -1,0 +1,133 @@
+{
+  "name": "MyFinanceBackup-DispatchAlert",
+  "active": false,
+  "nodes": [
+    {
+      "id": "execute-workflow-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {
+        "workflowInputsDefinition": {
+          "values": [
+            {
+              "name": "title",
+              "type": "string"
+            },
+            {
+              "name": "body",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ntfy-push",
+      "name": "ntfy.sh Push",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 220],
+      "continueOnFail": true,
+      "parameters": {
+        "method": "POST",
+        "url": "=https://ntfy.sh/{{ $env.MYFINANCE_BACKUP_NTFY_TOPIC }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Title",
+              "value": "={{ $json.title }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "text/plain",
+        "body": "={{ $json.body }}",
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "gmail-smtp",
+      "name": "Gmail SMTP Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [460, 400],
+      "continueOnFail": true,
+      "parameters": {
+        "fromEmail": "aftorresl01@gmail.com",
+        "toEmail": "aftorresl01@gmail.com",
+        "subject": "={{ $json.title }}",
+        "text": "={{ $json.body }}",
+        "options": {}
+      },
+      "credentials": {
+        "smtp": {
+          "id": "gmail-smtp-credential",
+          "name": "Gmail SMTP (aftorresl01)"
+        }
+      }
+    },
+    {
+      "id": "merge-results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [700, 300],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "ntfy.sh Push",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gmail SMTP Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ntfy.sh Push": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail SMTP Alert": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": ["backup", "myfinance"]
+}

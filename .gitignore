@@ -3,6 +3,9 @@ target/
 target/generated-sources/jooq/
 *.class
 
+# Node dependencies (runner sidecar — package-lock.json IS committed, node_modules is NOT)
+node_modules/
+
 # Maven
 !.mvn/wrapper/maven-wrapper.jar
 !.mvn/wrapper/maven-wrapper.properties
@@ -25,6 +28,14 @@ HELP.md
 .env
 .env.*
 !.env.example
+
+# age identities — NEVER commit any private key file
+age-identity*
+**/age-identity*
+*.identity
+# Whitelist the PUBLIC recipient files (these MUST be tracked so the runner
+# image bakes the right recipient at build time)
+!scripts/backup/recipients/*.txt
 
 # OS
 .DS_Store
