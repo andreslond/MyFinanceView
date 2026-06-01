@@ -2,7 +2,7 @@
 target/
 target/generated-sources/jooq/
 *.class
-
+backups/
 # Maven
 !.mvn/wrapper/maven-wrapper.jar
 !.mvn/wrapper/maven-wrapper.properties
