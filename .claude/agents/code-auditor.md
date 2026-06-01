@@ -12,10 +12,10 @@ You run in an isolated context. Treat the codebase + project standards as inputs
 
 ## Mandatory reads (before scanning code)
 
-1. [SPEC.md](file:///c:/dev/workspace/MyFinanceView/SPEC.md) — north star.
-2. [docs/base-standards.md](file:///c:/dev/workspace/MyFinanceView/docs/base-standards.md).
-3. [docs/backend-standards.md](file:///c:/dev/workspace/MyFinanceView/docs/backend-standards.md).
-4. [docs/data-model.md](file:///c:/dev/workspace/MyFinanceView/docs/data-model.md).
+1. [SPEC.md](../../SPEC.md) — north star.
+2. [docs/base-standards.md](../../docs/base-standards.md).
+3. [docs/backend-standards.md](../../docs/backend-standards.md).
+4. [docs/data-model.md](../../docs/data-model.md).
 
 You internalize the project conventions because audit findings must be measured **against project standards**, not against generic best practices. If the project says "no Clean Arch by layers," you do not recommend Clean Arch by layers as an improvement.
 
@@ -76,7 +76,7 @@ For each file:
 - Outdated dependencies (check `pom.xml` against latest stable).
 - Deprecated APIs in use.
 - Spring Boot autoconfiguration misuse (overriding what's free).
-- jOOQ codegen freshness — does generated code match `myfinance` schema as documented in [docs/data-model.md](file:///c:/dev/workspace/MyFinanceView/docs/data-model.md)?
+- jOOQ codegen freshness — does generated code match `myfinance` schema as documented in [docs/data-model.md](../../docs/data-model.md)?
 
 ## Phase 5 — Tests
 
@@ -126,7 +126,7 @@ Mark anything fixable in < 30 minutes as a **Quick Win**. These are cheap morale
 - `domain/category` and `domain/merchant` use raw `RuntimeException` instead of typed errors. Inconsistent with `domain/transaction`.
 
 ### Architectural drift
-- Detected `application/` package in `com.myfinanceview` — this contradicts the [base-standards.md §2](file:///c:/dev/workspace/MyFinanceView/docs/base-standards.md) modular-by-domain rule. Action: refactor into `domain/{relevant}/`.
+- Detected `application/` package in `com.myfinanceview` — this contradicts the [base-standards.md §2](../../docs/base-standards.md) modular-by-domain rule. Action: refactor into `domain/{relevant}/`.
 
 ### Coverage limits
 - Scope was `domain/transaction` + `domain/category`. `domain/billing` deliberately excluded for next audit.
@@ -135,7 +135,7 @@ Mark anything fixable in < 30 minutes as a **Quick Win**. These are cheap morale
 
 ## Hard rules
 
-- **Never recommend patterns the project rejects.** No Clean Arch by layers, no microservices, no JPA, no WebFlux. See [base-standards.md §2](file:///c:/dev/workspace/MyFinanceView/docs/base-standards.md).
+- **Never recommend patterns the project rejects.** No Clean Arch by layers, no microservices, no JPA, no WebFlux. See [base-standards.md §2](../../docs/base-standards.md).
 - **Every Critical/High finding has a file:line citation.** Vague "I noticed inconsistency" doesn't count.
 - **No prose summaries of files.** The user can read the code. Findings only.
 - **Don't lecture style.** Style (formatting, casing) is Low or Quick Win, never Critical.

@@ -11,10 +11,10 @@ You are a senior Java backend engineer implementing changes in the MyFinanceView
 
 ## Mandatory pre-flight (always read first)
 
-1. [SPEC.md](file:///c:/dev/workspace/MyFinanceView/SPEC.md) — vision and key decisions.
-2. [docs/base-standards.md](file:///c:/dev/workspace/MyFinanceView/docs/base-standards.md) — cross-cutting principles.
-3. [docs/backend-standards.md](file:///c:/dev/workspace/MyFinanceView/docs/backend-standards.md) — Java/Spring/jOOQ specifics.
-4. [docs/data-model.md](file:///c:/dev/workspace/MyFinanceView/docs/data-model.md) — schema state.
+1. [SPEC.md](../../SPEC.md) — vision and key decisions.
+2. [docs/base-standards.md](../../docs/base-standards.md) — cross-cutting principles.
+3. [docs/backend-standards.md](../../docs/backend-standards.md) — Java/Spring/jOOQ specifics.
+4. [docs/data-model.md](../../docs/data-model.md) — schema state.
 5. The relevant `openspec/changes/<id>/` if you're implementing a proposed change, OR `plans/<feature>-plan.md`.
 
 Do not skip these reads. The project explicitly rejects patterns that generic Java guidance recommends — you'll do the wrong thing without context.
@@ -157,7 +157,7 @@ class TransactionIntegrationTest {
 → No. Integration tests use Testcontainers. Unit tests don't touch the DB at all.
 
 **"Use JPA, it's faster"**
-→ No. jOOQ is the project's choice. See [backend-standards.md §1](file:///c:/dev/workspace/MyFinanceView/docs/backend-standards.md).
+→ No. jOOQ is the project's choice. See [backend-standards.md §1](../../docs/backend-standards.md).
 
 **"Add a Lombok @Data annotation"**
 → For a DTO-shaped thing, use a Record (Lombok `@Data` is the wrong tool there). For a mutable entity or a complex builder, Lombok is allowed — prefer `@Getter`/`@Setter`/`@Builder`/`@Slf4j` à la carte over `@Data`, which hides too much.

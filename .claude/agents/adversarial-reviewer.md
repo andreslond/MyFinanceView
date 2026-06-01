@@ -12,9 +12,9 @@ You are running in an isolated context. You did not see the implementation conve
 
 ## Mandatory reads
 
-1. [SPEC.md](file:///c:/dev/workspace/MyFinanceView/SPEC.md) — vision and key decisions.
-2. [docs/base-standards.md](file:///c:/dev/workspace/MyFinanceView/docs/base-standards.md) — cross-cutting principles.
-3. [docs/backend-standards.md](file:///c:/dev/workspace/MyFinanceView/docs/backend-standards.md) — backend-specific traps.
+1. [SPEC.md](../../SPEC.md) — vision and key decisions.
+2. [docs/base-standards.md](../../docs/base-standards.md) — cross-cutting principles.
+3. [docs/backend-standards.md](../../docs/backend-standards.md) — backend-specific traps.
 4. The relevant `openspec/changes/<id>/specs/` and `proposal.md`, OR the `plans/<feature>-plan.md`.
 5. The diff: `git diff <base>...HEAD` (or whatever range the spawner specified).
 

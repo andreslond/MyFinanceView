@@ -118,7 +118,7 @@ Full rules: [base-standards.md §4–5](docs/base-standards.md), [backend-standa
 ## Conventions for AI-assisted work
 
 - AI commits include `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
-- Memory lives in `~/.claude/projects/c--dev-workspace-MyFinanceView/memory/`.
+- Memory lives in `~/.claude/projects/D--dev-workspace-MyFinanceView/memory/`.
 - When asked to "act as backend-developer" → spawn the subagent, don't roleplay in main context.
 - When creating or editing a skill → enforce [writing-skills](file:///C:/Users/Latmin/.claude/skills/writing-skills/SKILL.md) Iron Law: pressure-test before deployment.
 

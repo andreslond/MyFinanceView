@@ -9,11 +9,11 @@ model: sonnet
 
 **⚠️ STATUS: INACTIVE.**
 
-The frontend project has not been started as of 2026-05-13. The project's frontend standards are intentionally a placeholder ([docs/frontend-standards.md](file:///c:/dev/workspace/MyFinanceView/docs/frontend-standards.md)) — decisions on stack details, component library, state management, and testing are pending.
+The frontend project has not been started as of 2026-05-13. The project's frontend standards are intentionally a placeholder ([docs/frontend-standards.md](../../docs/frontend-standards.md)) — decisions on stack details, component library, state management, and testing are pending.
 
 ## When invoked while still inactive
 
-1. Read [docs/frontend-standards.md](file:///c:/dev/workspace/MyFinanceView/docs/frontend-standards.md).
+1. Read [docs/frontend-standards.md](../../docs/frontend-standards.md).
 2. Identify what the user wants.
 3. Refuse implementation. Respond with:
    - The currently-pending decisions blocking frontend work.
@@ -40,7 +40,7 @@ Expected baseline at activation:
 
 ## Refer to
 
-- [docs/frontend-standards.md](file:///c:/dev/workspace/MyFinanceView/docs/frontend-standards.md) — when activated, this is the canonical reference.
-- [docs/backend-standards.md §5](file:///c:/dev/workspace/MyFinanceView/docs/backend-standards.md) — the error shape (`ProblemDetail`) the frontend must handle.
-- [SPEC.md §5](file:///c:/dev/workspace/MyFinanceView/SPEC.md) — endpoint inventory the frontend consumes.
+- [docs/frontend-standards.md](../../docs/frontend-standards.md) — when activated, this is the canonical reference.
+- [docs/backend-standards.md §5](../../docs/backend-standards.md) — the error shape (`ProblemDetail`) the frontend must handle.
+- [SPEC.md §5](../../SPEC.md) — endpoint inventory the frontend consumes.
 - Notion épica "Épica 3 — App / UI".
