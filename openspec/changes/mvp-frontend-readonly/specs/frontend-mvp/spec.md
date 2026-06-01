@@ -18,15 +18,19 @@ El sistema SHALL desplegar una aplicación SPA construida con Vite, React 19, Ty
 
 ### Requirement: Authentication via Supabase Auth
 
-El sistema SHALL delegar autenticación completamente a Supabase Auth (email/password y magic link) y mantener la sesión activa en el cliente con refresh automático. El JWT emitido por Supabase SHALL acompañar cada query a PostgREST.
+El sistema SHALL delegar autenticación completamente a Supabase Auth (email/password y magic link) y mantener la sesión activa en el cliente con refresh automático. El JWT emitido por Supabase SHALL acompañar cada query a PostgREST. El componente de auth SHALL configurarse para mostrar SÓLO el modo Sign In (no Sign Up) — single-user MVP.
 
 #### Scenario: Login con email/password exitoso
 - **WHEN** el usuario ingresa credenciales válidas en el formulario de login
 - **THEN** Supabase emite un JWT, la sesión se persiste en almacenamiento local, y el usuario es redirigido a la ruta protegida por defecto (`/transactions`)
 
-#### Scenario: Login con magic link
-- **WHEN** el usuario solicita un magic link a un email registrado
-- **THEN** Supabase envía el correo de autenticación y, al hacer clic en el enlace, el usuario aterriza autenticado en la ruta protegida por defecto
+#### Scenario: Solicitar magic link (UI-verifiable)
+- **WHEN** el usuario hace clic en "Enviar magic link" tras ingresar un email
+- **THEN** la UI muestra un estado de confirmación ("Revisa tu correo para iniciar sesión"), el form queda inhabilitado para reenvío inmediato, y el componente NO falla aunque el correo no haya llegado todavía
+
+#### Scenario: Callback de magic link con token válido
+- **WHEN** el navegador aterriza en la URL de callback de Supabase con un token válido en el hash/query
+- **THEN** el cliente intercambia el token por una sesión, persiste el JWT, y el usuario aterriza autenticado en la ruta protegida por defecto
 
 #### Scenario: Acceso sin sesión
 - **WHEN** un agente no autenticado intenta acceder a cualquier ruta distinta de `/login`
@@ -40,9 +44,13 @@ El sistema SHALL delegar autenticación completamente a Supabase Auth (email/pas
 - **WHEN** el usuario invoca logout
 - **THEN** la sesión se limpia del almacenamiento, las queries activas se cancelan, y el usuario aterriza en `/login`
 
+#### Scenario: Sign Up no se muestra
+- **WHEN** el usuario abre `/login`
+- **THEN** la UI NO ofrece tab/link de Sign Up — el único modo disponible es Sign In (forzado por configuración del componente, D9 del design.md)
+
 ### Requirement: Forward-compatible data access layer
 
-El sistema SHALL aislar toda interacción con `@supabase/supabase-js` en un único cliente (`src/lib/supabaseClient.ts`) y en una capa de servicios (`src/services/<entity>Service.ts`). Los componentes, pantallas y hooks de React Query SHALL consumir exclusivamente los métodos públicos de los services. Esta capa garantiza que la migración futura al backend Java REST consista en reemplazar el cuerpo de los services sin tocar componentes ni hooks.
+El sistema SHALL aislar toda interacción con `@supabase/supabase-js` en un único cliente (`src/lib/supabaseClient.ts`) y en una capa de servicios (`src/services/<entity>Service.ts`). Los componentes, pantallas y hooks de React Query SHALL consumir exclusivamente los métodos públicos de los services. Esta capa garantiza que la migración futura al backend Java REST consista en reemplazar el cuerpo de los services sin tocar componentes ni hooks. El shape DTO usado en este MVP es **inventado** y SHALL realinearse contra `docs/api-spec.yml` cuando ese contrato exista (caveat reconocido en `design.md D4`).
 
 #### Scenario: Componentes no importan `supabase-js` directo
 - **WHEN** un test estático (Vitest + glob sobre `src/`) busca importaciones de `@supabase/supabase-js`
@@ -52,9 +60,9 @@ El sistema SHALL aislar toda interacción con `@supabase/supabase-js` en un úni
 - **WHEN** un agente intenta importar `@supabase/supabase-js` desde un archivo bajo `src/pages/` o `src/components/`
 - **THEN** `eslint` reporta un error vía la regla `no-restricted-imports` configurada en el proyecto
 
-#### Scenario: Services exponen DTOs en formato API-spec
+#### Scenario: Services exponen DTOs en formato camelCase
 - **WHEN** un service retorna una transacción
-- **THEN** el objeto tiene campos en camelCase (`occurredAt`, `categoryId`, `categoryConfirmed`), fechas como ISO 8601 strings y montos como string (no `number`)
+- **THEN** el objeto tiene campos en camelCase (`occurredAt`, `categoryId`), fechas como ISO 8601 strings y montos como string (no `number`)
 
 #### Scenario: Hooks de React Query sobre services
 - **WHEN** una pantalla necesita listar transacciones
@@ -62,7 +70,7 @@ El sistema SHALL aislar toda interacción con `@supabase/supabase-js` en un úni
 
 ### Requirement: Transactions listing screen
 
-El sistema SHALL exponer una pantalla `/transactions` que liste las transacciones del usuario autenticado, ordenadas por `occurredAt` descendente, con paginación servidor-side y filtros por cuenta, categoría y estado de confirmación. El estado de los filtros SHALL reflejarse en query params de la URL para que los links sean compartibles.
+El sistema SHALL exponer una pantalla `/transactions` que liste las transacciones más recientes del usuario autenticado, ordenadas por `occurredAt` descendente, con paginación servidor-side y filtros por cuenta y categoría. El estado de los filtros SHALL reflejarse en query params de la URL para que los links sean compartibles. La pantalla NO muestra agregaciones monetarias (ver "Frontend never aggregates money") y NO conoce el concepto de "ciclo actual" (eso depende de `accounts.cut_day` que no es scope del MVP — M1 del adversarial review).
 
 #### Scenario: Lista por defecto
 - **WHEN** un usuario autenticado abre `/transactions`
@@ -76,17 +84,13 @@ El sistema SHALL exponer una pantalla `/transactions` que liste las transaccione
 - **WHEN** el usuario selecciona dos o más categorías
 - **THEN** la URL incluye `?categoryIds=<uuid1>,<uuid2>` y la lista incluye sólo transacciones que matchean cualquiera de las categorías seleccionadas
 
-#### Scenario: Filtro por estado de confirmación
-- **WHEN** el usuario activa el filtro "pendientes"
-- **THEN** la URL incluye `?confirmed=false` y la lista muestra sólo transacciones con `categoryConfirmed = false`
-
 #### Scenario: Link compartible
 - **WHEN** el usuario copia la URL con filtros aplicados y la pega en otra pestaña autenticada
 - **THEN** la lista se renderiza con los mismos filtros y los mismos resultados (a igualdad de datos)
 
-#### Scenario: Paginación
+#### Scenario: Paginación con siguiente/anterior
 - **WHEN** el usuario navega a la página 2
-- **THEN** la URL incluye `?page=2`, la lista muestra el siguiente bloque de resultados, y los filtros activos se preservan
+- **THEN** la URL incluye `?page=2`, la lista muestra el siguiente bloque de 25 resultados, los filtros activos se preservan, y NO se muestra "página 2 de N" (el total agregado queda fuera de scope del MVP)
 
 #### Scenario: Sin resultados
 - **WHEN** los filtros activos no matchean ninguna transacción del usuario
@@ -94,19 +98,19 @@ El sistema SHALL exponer una pantalla `/transactions` que liste las transaccione
 
 ### Requirement: Category change modal
 
-El sistema SHALL permitir cambiar la categoría de una transacción mediante un modal lanzado desde una fila de la lista. La operación SHALL marcar la transacción como confirmada (`categoryConfirmed = true`) y disparar el feedback loop a `myfinance.merchants` a través del trigger Postgres del capability `myfinance-data-policies`.
+El sistema SHALL permitir cambiar la categoría de una transacción mediante un modal lanzado desde una fila de la lista. La operación SHALL emitir exclusivamente `UPDATE myfinance.transactions SET category_id = $1 WHERE id = $2`. El sistema NO actualizará `myfinance.merchants` ni tocará la columna `category_confirmed` (esa columna no existe en el schema actual y el feedback loop a `merchants` está diferido al backend Java — TASK-BE-06; ver `design.md D2`).
 
 #### Scenario: Apertura del modal
 - **WHEN** el usuario hace clic en el control "cambiar categoría" de una fila
-- **THEN** se abre un modal con la transacción contextual visible (descripción, monto, fecha) y un dropdown poblado con las categorías disponibles ordenadas por `displayName` ascendente
+- **THEN** se abre un modal con la transacción contextual visible (descripción, monto, fecha) y un dropdown poblado con las categorías disponibles ordenadas por `displayName` ascendente (con fallback a `name` cuando `displayName` es null)
 
-#### Scenario: Confirmación exitosa
-- **WHEN** el usuario selecciona una categoría distinta y pulsa "Confirmar"
-- **THEN** la pantalla emite un UPDATE a `myfinance.transactions` que setea `categoryId` y `categoryConfirmed = true`, recibe la fila actualizada, cierra el modal con feedback visual de éxito, y la lista subyacente se refresca via React Query invalidation
+#### Scenario: Cambio de categoría exitoso
+- **WHEN** el usuario selecciona una categoría distinta a la actual y pulsa "Confirmar"
+- **THEN** la pantalla emite un UPDATE a `myfinance.transactions` que setea SÓLO `categoryId`, recibe la fila actualizada, cierra el modal con feedback visual de éxito, y la lista subyacente se refresca via React Query invalidation
 
-#### Scenario: Confirmación sin cambio
-- **WHEN** el usuario abre el modal y pulsa "Confirmar" sin cambiar la categoría seleccionada actualmente
-- **THEN** la operación setea `categoryConfirmed = true` (si no lo estaba), refresca la lista y cierra el modal — y el trigger Postgres se dispara igual porque la confirmación es la transición relevante
+#### Scenario: Modal idempotente — sin cambio de categoría
+- **WHEN** el usuario abre el modal y pulsa "Confirmar" sin cambiar la categoría seleccionada
+- **THEN** el service detecta que `selectedCategoryId === currentCategoryId` y NO emite query a Supabase; el modal se cierra silenciosamente (o muestra "Sin cambios") y la lista NO se refresca
 
 #### Scenario: Error de red
 - **WHEN** el UPDATE falla por red u otro error de Supabase
@@ -126,15 +130,15 @@ El sistema SHALL mostrar las categorías por su `displayName` (español). Si una
 
 #### Scenario: Fallback
 - **WHEN** una categoría tiene `displayName` null o vacío
-- **THEN** la UI muestra el `name` (ej. "Dining Out") y registra una advertencia en consola para que el operador la pueble (cierra TASK-DB-01)
+- **THEN** la UI muestra el `name` técnico (ej. "Dining Out") sin advertencias en consola — el cierre de TASK-DB-01 (`display_name` backfill) se hace en un change separado
 
 ### Requirement: Vercel deployment
 
-El sistema SHALL estar desplegado en Vercel como un proyecto vinculado al monorepo con root directory `frontend/`. Las variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` SHALL estar configuradas en el ambiente de producción de Vercel.
+El sistema SHALL estar desplegado en Vercel como un proyecto vinculado al monorepo con root directory `frontend/`. Las variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` SHALL estar configuradas en el ambiente de producción de Vercel. El build command de Vercel SHALL encadenar `npm run typecheck && npm run lint && npm run test && npm run build` para que CI sea un único gate (D7 + m9 del adversarial review).
 
 #### Scenario: Build en Vercel
 - **WHEN** se hace push a `main` con cambios en `frontend/**`
-- **THEN** Vercel detecta el cambio, ejecuta `npm install && npm run build` con root `frontend/`, y publica el bundle en la URL productiva
+- **THEN** Vercel detecta el cambio, ejecuta el build command encadenado con root `frontend/`, y publica el bundle en la URL productiva
 
 #### Scenario: Variables de entorno
 - **WHEN** el bundle de producción inicia
@@ -143,6 +147,10 @@ El sistema SHALL estar desplegado en Vercel como un proyecto vinculado al monore
 #### Scenario: Smoke test post-deploy
 - **WHEN** un curl a la URL productiva pide la raíz
 - **THEN** el servidor responde HTTP 200 con el `index.html` de Vite
+
+#### Scenario: SPA rewrites configurados
+- **WHEN** un curl pide una ruta cliente como `/transactions`
+- **THEN** Vercel responde con el `index.html` (no 404), permitiendo que React Router renderice la ruta correcta
 
 ### Requirement: Frontend never aggregates money
 
@@ -158,7 +166,7 @@ El frontend NEVER SHALL computar agregaciones monetarias (sumas, promedios, tota
 
 ### Requirement: Documented agent rules
 
-El repositorio SHALL incluir `frontend/AGENTS.md` documentando: la regla de aislamiento de `supabase-js`, la prohibición de agregaciones monetarias en frontend, la estructura `lib/services/hooks/pages` esperada, y el mapeo de DTOs a `api-spec.yml`. Estas reglas SHALL ser legibles por cualquier agente que entre al folder.
+El repositorio SHALL incluir `frontend/AGENTS.md` documentando: la regla de aislamiento de `supabase-js`, la prohibición de agregaciones monetarias en frontend, la estructura `lib/services/hooks/pages` esperada, el shape inventado de DTOs (para diff futuro contra `api-spec.yml`), el mapeo Tailwind ↔ tokens de `docs/design/design-system.md`, y la regla "NO actualizar `merchants` desde la UI" (responsabilidad de TASK-BE-06 del backend Java). Estas reglas SHALL ser legibles por cualquier agente que entre al folder.
 
 #### Scenario: Agente lee `frontend/AGENTS.md`
 - **WHEN** un agente nuevo abre `frontend/` por primera vez
