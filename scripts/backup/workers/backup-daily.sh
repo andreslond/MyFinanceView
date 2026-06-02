@@ -29,6 +29,34 @@ cleanup() {
 trap cleanup EXIT
 
 # ---------------------------------------------------------------------------
+# §4.3.14 ERR trap — round-4 review M2 fix.
+# The earlier draft only dispatched alerts at two inline failure points
+# (SHA mismatch, verify-failed), leaving every other failure source
+# (pg_isready, pg_dump, tar, age, rclone) covered ONLY by the n8n-side
+# ErrorHandler. That depended on §8.4a being completed correctly and went
+# silent on a Schedule-Trigger non-fire. This ERR trap restores the spec
+# contract "any failure → dispatch_alert + non-zero exit" from inside the
+# worker. The trap fires on every non-zero exit before EXIT runs; it does
+# NOT fire on intentional `exit N` where dispatch_alert was already called
+# inline (we set ALERT_DISPATCHED=1 in those branches so the trap no-ops).
+# ---------------------------------------------------------------------------
+ALERT_DISPATCHED=0
+on_error() {
+  local exit_code=$?
+  local line_no=$1
+  if [[ "$ALERT_DISPATCHED" -eq 1 ]]; then
+    return
+  fi
+  local log_tail=""
+  if [[ -f "${LOG_FILE:-}" ]]; then
+    log_tail="$(tail -n 20 "$LOG_FILE" 2>/dev/null || true)"
+  fi
+  dispatch_alert "MyFinance daily backup FAILED (line $line_no exit $exit_code)" \
+    "$log_tail" || true
+}
+trap 'on_error "$LINENO"' ERR
+
+# ---------------------------------------------------------------------------
 # Capture log tail for failure alert
 # ---------------------------------------------------------------------------
 LOG_FILE="${WORK_DIR}/run.log"
@@ -41,6 +69,12 @@ log_info "=== backup-daily.sh START ==="
 # ---------------------------------------------------------------------------
 pg_isready -h "${BACKUP_DB_HOST}" -p "${BACKUP_DB_PORT:-5432}" -t 5 || {
   log_error "Supabase pooler ${BACKUP_DB_HOST}:${BACKUP_DB_PORT:-5432} unreachable. If pg_dump previously worked, the pooler hostname may have moved — check Supabase Dashboard → Connect → Session pooler and update .env.local."
+  # Round-5 review R5-M1 fix — explicit `exit 3` skips the ERR trap, so we
+  # must dispatch_alert inline AND set ALERT_DISPATCHED so the trap (if it
+  # somehow re-fires) does not double-dispatch.
+  dispatch_alert "MyFinance daily backup FAILED — pooler unreachable" \
+    "Host ${BACKUP_DB_HOST}:${BACKUP_DB_PORT:-5432} did not respond to pg_isready (5s timeout). Check Supabase Dashboard → Connect → Session pooler in case the hostname migrated; update .env.local accordingly." || true
+  ALERT_DISPATCHED=1
   exit 3
 }
 
@@ -117,14 +151,11 @@ rclone check "${WORK_DIR}/${TODAY}.tar.age" "r2:${BUCKET}/daily/" --one-way
 
 # ---------------------------------------------------------------------------
 # 4.3.6b Post-upload SHA-256 re-verify (M12 fix)
+# Round-4 review M3: dropped the dead-code first-attempt re-download block
+# that risked mv'ing the original encrypted file out from under later steps.
+# The only correct path is to download to a separate directory.
 # ---------------------------------------------------------------------------
-log_info "Re-downloading for SHA-256 verification"
-REDOWNLOAD_PATH="${WORK_DIR}/redownload-${TODAY}.tar.age"
-rclone copy "r2:${BUCKET}/daily/${TODAY}.tar.age" "${WORK_DIR}/" --local-no-check-updated
-mv "${WORK_DIR}/${TODAY}.tar.age" "${REDOWNLOAD_PATH}" 2>/dev/null || \
-  rclone copy "r2:${BUCKET}/daily/${TODAY}.tar.age" "${WORK_DIR}/redownloaded/"
-
-# Re-download to a distinct filename to avoid overwriting the original
+log_info "Re-downloading from R2 for SHA-256 verification"
 REDOWNLOAD_DIR="${WORK_DIR}/r2-redownload"
 mkdir -p "${REDOWNLOAD_DIR}"
 rclone copy "r2:${BUCKET}/daily/${TODAY}.tar.age" "${REDOWNLOAD_DIR}/"
@@ -136,6 +167,7 @@ if [[ "$LOCAL_SHA256" != "$R2_SHA256" ]]; then
   rclone moveto "r2:${BUCKET}/daily/${TODAY}.tar.age" "r2:${BUCKET}/${QUARANTINE_KEY}"
   dispatch_alert "MyFinance daily backup UPLOAD CORRUPTED" \
     "SHA-256 mismatch after upload. local=${LOCAL_SHA256} r2=${R2_SHA256} | Quarantined to: ${QUARANTINE_KEY}" || true
+  ALERT_DISPATCHED=1
   exit 7
 fi
 log_info "SHA-256 re-verify passed: ${R2_SHA256}"
@@ -184,6 +216,7 @@ if [[ "$VERIFY_FAILED" == "true" ]]; then
   LOG_TAIL="$(tail -20 "${LOG_FILE}" 2>/dev/null || true)"
   dispatch_alert "MyFinance daily backup VERIFY FAILED" \
     "Artefact quarantined to: ${QUARANTINE_KEY}\n${LOG_TAIL}" || true
+  ALERT_DISPATCHED=1
   exit 8
 fi
 
@@ -226,18 +259,17 @@ STATUS_LOG_LINE="$(date -u +%Y-%m-%dT%H:%M:%SZ) daily SUCCESS sha256=${LOCAL_SHA
 } | rclone rcat "r2:${BUCKET}/status/status.log"
 
 # ---------------------------------------------------------------------------
-# 4.3.12 Kuma success ping (fire-and-forget — NO -f flag)
+# 4.3.12 (DROPPED in v1 — operator decision 2026-06-01)
+# Uptime Kuma success push removed together with the in-cluster dead-man-switch.
+# Failure detection now relies on dispatch_alert reaching ntfy or Resend; the
+# operator's external uptime monitor on n8n.datachefnow.com covers the
+# host-down case. See openspec/changes/supabase-backup-policy/design.md
+# Decision 7. Re-introduce here if a bounded follow-up reinstates Kuma or
+# healthchecks.io.
 # ---------------------------------------------------------------------------
-KUMA_URL="${MYFINANCE_BACKUP_KUMA_PUSH_URL:-}"
-if [[ -n "$KUMA_URL" ]]; then
-  curl -sS --max-time 10 "${KUMA_URL}?status=up&msg=ok&ping=${ELAPSED_MS}" \
-    > /dev/null 2>&1 || log_info "kuma push failed (non-fatal)"
-fi
 
 # ---------------------------------------------------------------------------
-# 4.3.13 (deferred under v3 — Gate C cut M1: off-VPS dead-man-switch out of scope
-# until/unless Kuma proves insufficient. Re-introduce here if a bounded follow-up
-# adds healthchecks.io.)
+# 4.3.13 (deferred — off-VPS dead-man-switch out of scope in v1)
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -247,8 +279,12 @@ log_info "=== backup-daily.sh SUCCESS ==="
 emit_json_result "{\"path\":\"daily/${TODAY}.tar.age\",\"sha256\":\"${LOCAL_SHA256}\",\"durationMs\":${ELAPSED_MS}}"
 
 # ---------------------------------------------------------------------------
-# Failure handler (sourced helpers + set -e will call this via EXIT trap on error)
-# ---------------------------------------------------------------------------
-# Note: this function is defined but EXIT trap above (cleanup) runs on all exits.
-# Alert dispatch for failures is handled inline at each failure point above.
-# The trap only cleans up the working directory.
+# Failure handler — round-4 review M2 fix.
+# Failure paths:
+#   1. ERR trap (installed near the top of the script) catches non-zero exits
+#      from any unguarded command and fires dispatch_alert with the line number
+#      + the last 20 log lines. ALERT_DISPATCHED guards against double-fire on
+#      the two paths that already dispatch inline (SHA-mismatch line ~163,
+#      verify-failed line ~211).
+#   2. EXIT trap (above) cleans up WORK_DIR unconditionally.
+# Net contract: every non-zero exit reaches dispatch_alert exactly once.

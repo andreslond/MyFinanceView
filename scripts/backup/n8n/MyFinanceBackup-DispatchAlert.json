@@ -52,23 +52,38 @@
       }
     },
     {
-      "id": "gmail-smtp",
-      "name": "Gmail SMTP Alert",
-      "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2,
+      "id": "resend-email",
+      "name": "Resend Email Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [460, 400],
       "continueOnFail": true,
       "parameters": {
-        "fromEmail": "aftorresl01@gmail.com",
-        "toEmail": "aftorresl01@gmail.com",
-        "subject": "={{ $json.title }}",
-        "text": "={{ $json.body }}",
-        "options": {}
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ from: $env.MYFINANCE_BACKUP_ALERT_FROM, to: $env.MYFINANCE_BACKUP_ALERT_TO, subject: $json.title, text: $json.body }) }}",
+        "options": {
+          "timeout": 30000
+        }
       },
       "credentials": {
-        "smtp": {
-          "id": "gmail-smtp-credential",
-          "name": "Gmail SMTP (aftorresl01)"
+        "httpHeaderAuth": {
+          "id": "myfinance-backup-resend-auth",
+          "name": "MyFinance Backup Resend (HTTP Header Auth)"
         }
       }
     },
@@ -95,7 +110,7 @@
             "index": 0
           },
           {
-            "node": "Gmail SMTP Alert",
+            "node": "Resend Email Alert",
             "type": "main",
             "index": 0
           }
@@ -113,7 +128,7 @@
         ]
       ]
     },
-    "Gmail SMTP Alert": {
+    "Resend Email Alert": {
       "main": [
         [
           {

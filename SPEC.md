@@ -562,6 +562,8 @@ En este orden:
 7. **TASK-BE-03** — Spring Security con JWT de Supabase
 8. Desde ahí, TDD endpoint por endpoint siguiendo el orden de la Sección 6
 
+**Operational gate aplicable a partir del paso 1:** todo write a Supabase remote (incluidos los Flyway migrate/baseline de TASK-DB-06) **debería** ir precedido por un snapshot fresco — daily reciente en `status/last-success.json` o pre-op tomado < 60 min antes — siguiendo el documented gate descrito en [`docs/development-guide.md §12 Backup & Disaster Recovery`](docs/development-guide.md#12-backup--disaster-recovery). La policy completa está en el cambio `openspec/changes/supabase-backup-policy/` (activo, branch `feat/supabase-backup-policy-replant`) y migra a `openspec/specs/database-backups/` tras `/opsx:archive`. Gate documentation-only — no hay enforcement automático.
+
 ---
 
 *Este documento es la fuente de verdad del proyecto. Ante cualquier ambigüedad entre el código y este spec, el spec gana.*

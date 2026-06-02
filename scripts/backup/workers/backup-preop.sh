@@ -38,14 +38,44 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# ---------------------------------------------------------------------------
+# Round-5 review R5-M2 fix — symmetric ERR trap with backup-daily.sh.
+# Pre-op failures from pg_isready / pg_dump / tar / age / rclone need to
+# fire dispatch_alert so the operator sees the failure even if §8.4a
+# errorWorkflow re-link was skipped. ALERT_DISPATCHED guards the two
+# inline dispatch paths (upload-corrupted + verify-failed) below.
+# Note: `set -E` (errtrace) is intentionally NOT enabled so this ERR trap
+# does not recurse into dispatch_alert (round-5 R5-Q1).
+# ---------------------------------------------------------------------------
+ALERT_DISPATCHED=0
+on_error() {
+  local exit_code=$?
+  local line_no=$1
+  if [[ "$ALERT_DISPATCHED" -eq 1 ]]; then
+    return
+  fi
+  local log_tail=""
+  if [[ -f "${LOG_FILE:-}" ]]; then
+    log_tail="$(tail -n 20 "$LOG_FILE" 2>/dev/null || true)"
+  fi
+  dispatch_alert "MyFinance pre-op backup FAILED (line $line_no exit $exit_code)" \
+    "reason=${REASON:-unknown} | $log_tail" || true
+}
+trap 'on_error "$LINENO"' ERR
+
 LOG_FILE="${WORK_DIR}/run.log"
 exec 2> >(tee -a "$LOG_FILE" >&2)
 
 # ---------------------------------------------------------------------------
 # pg_isready precheck (same as backup-daily.sh 4.3.0)
+# Round-5 review R5-M1 fix — dispatch_alert inline + set ALERT_DISPATCHED
+# before exit so the `|| { exit 3; }` short-circuit does NOT skip the alert.
 # ---------------------------------------------------------------------------
 pg_isready -h "${BACKUP_DB_HOST}" -p "${BACKUP_DB_PORT:-5432}" -t 5 || {
   log_error "Supabase pooler ${BACKUP_DB_HOST}:${BACKUP_DB_PORT:-5432} unreachable."
+  dispatch_alert "MyFinance pre-op backup FAILED — pooler unreachable" \
+    "Host ${BACKUP_DB_HOST}:${BACKUP_DB_PORT:-5432} did not respond to pg_isready (5s timeout). Check Supabase Dashboard → Connect → Session pooler in case the hostname migrated; update .env.local accordingly." || true
+  ALERT_DISPATCHED=1
   exit 3
 }
 
@@ -115,6 +145,7 @@ if [[ "$LOCAL_SHA256" != "$R2_SHA256" ]]; then
   rclone moveto "r2:${BUCKET}/pre-op/${ARTEFACT_NAME}" "r2:${BUCKET}/${QUARANTINE_KEY}"
   dispatch_alert "MyFinance pre-op backup UPLOAD CORRUPTED" \
     "SHA-256 mismatch. Quarantined to: ${QUARANTINE_KEY}" || true
+  ALERT_DISPATCHED=1
   emit_json_result "{\"error\":\"upload_corrupted\",\"local_sha256\":\"${LOCAL_SHA256}\",\"r2_sha256\":\"${R2_SHA256}\",\"quarantined_to\":\"${QUARANTINE_KEY}\"}"
   exit 7
 fi
@@ -145,6 +176,7 @@ if [[ "$VERIFY_FAILED" == "true" ]]; then
   rclone moveto "r2:${BUCKET}/pre-op/${ARTEFACT_NAME}" "r2:${BUCKET}/${QUARANTINE_KEY}" || true
   dispatch_alert "MyFinance pre-op backup VERIFY FAILED" \
     "Reason: ${REASON} | Quarantined: ${QUARANTINE_KEY}" || true
+  ALERT_DISPATCHED=1
   # last-preop.json is NOT updated on failure
   emit_json_result "{\"error\":\"verify_failed\",\"quarantined_to\":\"${QUARANTINE_KEY}\"}"
   exit 8
