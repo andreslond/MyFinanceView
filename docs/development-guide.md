@@ -194,3 +194,72 @@ The `-v` flag drops volumes; migrations in `backend/database/migrations/` re-run
 | Testcontainers timeout on start | Docker daemon not running | Start Docker Desktop |
 | 401 on every endpoint | JWT missing/expired | Re-login via Supabase auth |
 | Connection pool exhausted | Hikari max < concurrency | Bump max or audit for leaks |
+
+## 12. MVP Frontend Deploy (Vercel)
+
+The frontend MVP from `openspec/changes/mvp-frontend-readonly/` is deployed to Vercel as a static SPA. It talks to Supabase directly via `supabase-js`; the backend Java is not yet in the deploy path.
+
+### Production URL
+
+`https://frontend-delta-murex-29.vercel.app`
+
+(There is also a canonical deployment-id URL printed by `vercel deploy --prod`; the alias above is the stable shareable one.)
+
+### Vercel project
+
+- Owner: `andrestor2-gmailcoms-projects`
+- Project: `frontend` (Vite framework auto-detected; root `frontend/`)
+- Linked locally via `frontend/.vercel/project.json` (gitignored)
+
+### Required env vars (production)
+
+| Variable name | Source |
+|---|---|
+| `VITE_SUPABASE_URL` | Supabase dashboard → Settings → API → Project URL, or MCP `get_project_url(akkoqdjmmozyqdfjkabg)` |
+| `VITE_SUPABASE_ANON_KEY` | Supabase dashboard → Settings → API → "anon public" (legacy JWT), or MCP `get_publishable_keys(akkoqdjmmozyqdfjkabg)` |
+
+**Never commit the values.** The names live in `frontend/.env.example`; real values live in `frontend/.env.local` (gitignored) for local dev and in Vercel's project env config for production.
+
+### Build command (chained CI gate)
+
+Vercel runs the entire local script suite — `npm run typecheck && npm run lint && npm run test && npm run build` — as the build command. If any step fails, the deploy fails. Defined in `frontend/vercel.json`.
+
+### Redeploy
+
+```bash
+cd frontend
+vercel deploy --prod          # uses the linked project + stored env vars
+```
+
+For preview deploys (PRs, branches), drop `--prod`.
+
+### Adding or rotating env vars
+
+```bash
+echo -n "value" | vercel env add VITE_NAME production
+# or interactively (CLI prompts and asks for environments):
+vercel env add VITE_NAME
+```
+
+After changing an env var, redeploy is required to bake the new value into the bundle (Vite inlines `import.meta.env.VITE_*` at build time).
+
+### Smoke test
+
+```bash
+curl -I https://frontend-delta-murex-29.vercel.app/                # expect HTTP/2 200
+curl -sS https://frontend-delta-murex-29.vercel.app/transactions   # SPA rewrite serves index.html, HTTP 200
+```
+
+### Renaming the project
+
+The auto-generated project name `frontend` is generic. To rename to `myfinance-view`, do it in the Vercel dashboard (Project Settings → General → Project Name) or by running `vercel project rm frontend && vercel link --yes --project myfinance-view` from `frontend/`.
+
+### Local dev against production Supabase
+
+```bash
+cd frontend
+npm install                  # once
+npm run dev                  # http://localhost:5173
+```
+
+`.env.local` must exist with the same two `VITE_*` vars. The dev server proxies nothing — Supabase is reached directly from the browser.
