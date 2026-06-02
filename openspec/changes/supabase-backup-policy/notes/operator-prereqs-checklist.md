@@ -17,9 +17,12 @@
 | `BACKUP_DB_PASSWORD` | _________________ | Paso 8 |
 | `MYFINANCE_BACKUP_AGE_IDENTITY` (contenido completo) | _________________ | Paso 2 |
 | `MYFINANCE_BACKUP_NTFY_TOPIC` | _________________ | Paso 7 |
-| `MYFINANCE_BACKUP_GMAIL_APP_PASSWORD` | _________________ | Paso 6 |
-| `MYFINANCE_BACKUP_KUMA_PUSH_URL` | _________________ | Paso 9 |
+| `MYFINANCE_BACKUP_RESEND_API_KEY` | _________________ | Paso 6 |
+| `MYFINANCE_BACKUP_ALERT_FROM` (= `alerts@datachefnow.com`) | _________________ | Paso 6 |
+| `MYFINANCE_BACKUP_ALERT_TO` (operator inbox) | _________________ | Paso 6 |
 | `MYFINANCE_BACKUP_RUNNER_SECRET` | _________________ | Paso 10 |
+
+> **v1 cuts (operator decision 2026-06-01):** `MYFINANCE_BACKUP_GMAIL_APP_PASSWORD` (replaced by Resend) and `MYFINANCE_BACKUP_KUMA_PUSH_URL` (Kuma deferred) are no longer captured — see Paso 6 + Paso 9 below.
 
 ---
 
@@ -91,17 +94,15 @@
   - **Account ID** (32-char hex, sale en la URL `dash.cloudflare.com/<account-id>/...`) → `BACKUP_R2_ACCOUNT_ID`
 - [ ] → **Guarda los 3 en gestor de contraseñas**.
 
-### 5 Lifecycle policies sobre `my-finance-view-backups`
+### 1 Lifecycle policy sobre `my-finance-view-backups` (v1, recorte del 2026-06-01)
 
-En el bucket → **Settings** → **Object lifecycle rules** → **Add rule** para cada uno:
+En el bucket → **Settings** → **Object lifecycle rules** → **Add rule**:
 
-- [ ] Rule 1: prefix `daily/` · delete after `30 days`
-- [ ] Rule 2: prefix `weekly/` · delete after `90 days`
-- [ ] Rule 3: prefix `monthly/` · delete after `365 days`
-- [ ] Rule 4: prefix `pre-op/` · delete after `90 days`
-- [ ] Rule 5: prefix `quarantine/` · delete after `365 days`
+- [ ] Rule única: nombre `myfinance-daily-30d` · prefix `daily/` · delete after `30 days`
 
-Saca screenshot del dashboard final con los 5 rules para tu runbook (los va a referenciar `README.md §2.5.4`).
+**No configures rules para `weekly/`, `monthly/`, `pre-op/`, `quarantine/`** — acumulan sin expirar en v1 (YAGNI, proyección de volumen anual < 4 GB dentro del free tier de 10 GB). Spot-check mensual de `pre-op/` está en `tasks.md §10.5`. Si la acumulación se vuelve problemática más adelante, reinstalar las 4 reglas restantes es un follow-up de 5 minutos.
+
+Saca screenshot del dashboard final con la regla única para tu runbook (la va a referenciar `README.md §2.5.4`).
 
 ---
 
@@ -109,13 +110,29 @@ Saca screenshot del dashboard final con los 5 rules para tu runbook (los va a re
 
 ---
 
-## Paso 6 — Gmail App Password
+## Paso 6 — Resend API key (v1, recorte del 2026-06-01)
 
-- [ ] Asegúrate de tener 2FA activado en tu cuenta `aftorresl01@gmail.com` (requisito de App Passwords).
-- [ ] Abre https://myaccount.google.com/apppasswords.
-- [ ] **App name:** `MyFinanceView backups`.
-- [ ] Click **Create** → captura los 16 caracteres (formato `xxxx xxxx xxxx xxxx`, sin espacios cuando lo uses).
-- [ ] → **Guarda como `MYFINANCE_BACKUP_GMAIL_APP_PASSWORD` en gestor de contraseñas**.
+> **v1 cut:** este paso reemplaza por completo el flujo de Gmail App Password → SMTP. Resend separa la identidad del remitente (dominio del sistema) de la del destinatario (inbox del operador), evita los bloqueos por "actividad sospechosa" de Google cuando el VPS cambia de IP, y unifica el transporte de email con el resto del producto futuro.
+
+- [ ] Abre https://resend.com/api-keys.
+- [ ] Confirma que el dominio `datachefnow.com` aparece como **Verified** en https://resend.com/domains (ya verificado vía Route 53 / us-east-1; si no aparece, sigue las instrucciones de Resend para añadir los registros DNS antes de continuar).
+- [ ] Click **Create API Key**:
+  - **Name:** `MyFinanceView backups`
+  - **Permission:** **Sending access** (solo enviar — no permitas "Full access")
+  - **Domain:** `datachefnow.com`
+- [ ] Click **Create** → captura el valor `re_...` que Resend muestra ONE-TIME.
+- [ ] → **Guarda como `MYFINANCE_BACKUP_RESEND_API_KEY` en gestor de contraseñas**.
+- [ ] Decide y captura las dos direcciones del parámetro de Resend:
+  - **`MYFINANCE_BACKUP_ALERT_FROM`** = `alerts@datachefnow.com` (default; debe ser en el dominio verificado).
+  - **`MYFINANCE_BACKUP_ALERT_TO`** = tu inbox operador (e.g. `aftorresl01@gmail.com`).
+- [ ] → **Guarda ambas en gestor de contraseñas** (no son secretas, pero quedan junto al API key).
+- [ ] **Smoke test rápido (opcional):** desde PowerShell, envía un email de prueba:
+  ```powershell
+  $resend_key = "<tu api key>"
+  $body = @{from="alerts@datachefnow.com"; to="<tu inbox>"; subject="Resend smoke from operator"; text="hola"} | ConvertTo-Json
+  curl.exe -X POST https://api.resend.com/emails -H "Authorization: Bearer $resend_key" -H "Content-Type: application/json" -d $body
+  ```
+  Deberías ver `{"id":"..."}` en stdout y el email llegando a tu inbox en < 30 s.
 
 ---
 
@@ -150,31 +167,13 @@ Saca screenshot del dashboard final con los 5 rules para tu runbook (los va a re
 
 ---
 
-## Paso 9 — Uptime Kuma Push Monitor
+## Paso 9 — Uptime Kuma Push Monitor (DROPPED v1, recorte del 2026-06-01)
 
-- [ ] Abre tu Uptime Kuma UI (la URL que ya conoces).
-- [ ] **+ Add New Monitor**:
-  - **Monitor Type:** `Push`
-  - **Friendly Name:** `MyFinance Daily Backup`
-  - **Heartbeat Interval:** `86400` (24h en segundos)
-  - **Heartbeat Retry Interval:** dejar default
-  - **Retries:** `0`
-  - **Heartbeat Grace Period:** `21600` (6h en segundos = grace 30h total)
-- [ ] **Save** → captura la **Push URL** que Kuma genera (formato `https://<tu-kuma>/api/push/<token>?status=up&msg=OK&ping=`).
-- [ ] → **Guarda como `MYFINANCE_BACKUP_KUMA_PUSH_URL` en gestor de contraseñas**.
-
-### Notification channel (CRÍTICO — un monitor sin canal es silencioso)
-
-- [ ] En el monitor recién creado → tab **Notifications** → **Setup Notification**.
-- [ ] Crea AL MENOS UN channel. Opciones:
-  - **Telegram bot** (recomendado si ya tienes uno): bot token + chat ID.
-  - **Gmail SMTP**: host `smtp.gmail.com` port `587` STARTTLS user `aftorresl01@gmail.com` pass `<MYFINANCE_BACKUP_GMAIL_APP_PASSWORD>` to `aftorresl01@gmail.com`.
-  - **ntfy.sh**: server `https://ntfy.sh` topic `<usa otro topic distinto del paso 7, dedicado a Kuma>`.
-  - **Discord**: webhook URL.
-  - **Generic webhook**.
-- [ ] **Click "Test"** sobre el channel → confirma que la notificación llega (mensaje de Telegram / email / Discord / ntfy).
-- [ ] Documenta qué channel usaste — va a `README.md §2.5.5` como nota.
-- [ ] Attach el channel al monitor `MyFinance Daily Backup` (checkbox en la lista de canales).
+> **No hagas este paso.** El Uptime Kuma in-cluster dead-man-switch está diferido en v1 junto con healthchecks.io off-VPS. El monitor externo del operador en `n8n.datachefnow.com` cubre el caso host-down.
+>
+> **Failure mode aceptado:** un Schedule-Trigger silencioso (VPS up, n8n cron no disparó) no produce alerta in-cluster en v1. Si se observa en producción, reinstalar Kuma es un follow-up bounded.
+>
+> No necesitas capturar `MYFINANCE_BACKUP_KUMA_PUSH_URL`, no necesitas crear un Push Monitor, no necesitas configurar canales en Kuma para este backup. Pasa directo al Paso 10.
 
 ---
 
@@ -219,14 +218,15 @@ Estado físico:
 - [ ] `age-identity-primary.txt` en `%USERPROFILE%\.config\myfinance-backup\` con ACL restrictivo.
 - [ ] Sobre #1 con copia impresa en location A.
 
-Estado en gestor de contraseñas (los 9 valores de la tabla del inicio).
+Estado en gestor de contraseñas (todos los valores de la tabla de captura al inicio del documento).
 
-Estado en cuentas externas:
-- [ ] Cloudflare R2 token activo + 5 lifecycle policies.
-- [ ] Gmail App Password generado.
+Estado en cuentas externas (v1):
+- [ ] Cloudflare R2 token activo + 1 lifecycle policy `myfinance-daily-30d`.
+- [ ] Resend API key generado, dominio `datachefnow.com` verificado, sender + recipient capturados.
 - [ ] ntfy topic suscrito en phone + smoke test verde.
 - [ ] Supabase Session Pooler endpoint confirmado.
-- [ ] Kuma Push Monitor con notification channel testeado verde.
+
+**No requerido en v1 (recortes del 2026-06-01):** Gmail App Password, Uptime Kuma Push Monitor.
 
 Estado en repo:
 - [ ] `scripts/backup/recipients/primary.txt` contiene tu recipient real (no placeholder).

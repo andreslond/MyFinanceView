@@ -61,12 +61,12 @@ The system SHALL provide a manual procedure that produces a labelled snapshot be
 #### Scenario: Pre-op fails loudly when post-upload SHA-256 mismatches (M12 fix)
 
 - **WHEN** the pre-op pipeline computes one SHA-256 locally before upload AND a different SHA-256 from a re-download of the just-uploaded object on R2
-- **THEN** the artefact is moved (server-side) from `pre-op/` to `quarantine/<timestamp>-pre-op-<original-name>`, `status/last-preop.json` is NOT updated, the sidecar response status is 500 with body `{"error":"upload_corrupted","local_sha256":"…","r2_sha256":"…","quarantined_to":"quarantine/…"}`, and all three alert legs engage (ntfy explicit fire + Gmail explicit fire + Kuma absence-of-success-push)
+- **THEN** the artefact is moved (server-side) from `pre-op/` to `quarantine/<timestamp>-pre-op-<original-name>`, `status/last-preop.json` is NOT updated, the sidecar response status is 500 with body `{"error":"upload_corrupted","local_sha256":"…","r2_sha256":"…","quarantined_to":"quarantine/…"}`, and both v1 alert legs engage (ntfy explicit fire + Resend explicit fire)
 
 #### Scenario: Pre-op fails loudly when restore-verify rejects the snapshot
 
 - **WHEN** the pre-op artefact uploads successfully, the SHA-256 re-verify matches, but the subsequent restore-verify finds `myfinance.transactions` row count below the configured threshold
-- **THEN** the artefact is moved (server-side) from `pre-op/` to `quarantine/<timestamp>-pre-op-<original-name>` (M15 fix), the sidecar response status is 500, the response body contains `{"error":"verify_failed","probe":{...},"quarantined_to":"quarantine/…"}`, `status/last-preop.json` is NOT updated, and explicit ntfy + Gmail alerts are dispatched
+- **THEN** the artefact is moved (server-side) from `pre-op/` to `quarantine/<timestamp>-pre-op-<original-name>` (M15 fix), the sidecar response status is 500, the response body contains `{"error":"verify_failed","probe":{...},"quarantined_to":"quarantine/…"}`, `status/last-preop.json` is NOT updated, and explicit ntfy + Resend alerts are dispatched
 
 ### Requirement: Encryption with a single project-owned age recipient, single-paper custody (v3 Gate C cut B1)
 
@@ -127,14 +127,14 @@ The system SHALL upload every snapshot to a primary cloud bucket hosted on Cloud
 - **WHEN** the operator inspects the R2 API token used by the backup workflows
 - **THEN** the token's permissions are `Object Read & Write` and its bucket scope is `my-finance-view-backups`, with no broader scope
 
-### Requirement: Retention policy enforced bucket-side via R2 lifecycle rules
+### Requirement: Retention policy enforced bucket-side via a single R2 lifecycle rule (v1)
 
-The system SHALL define R2 Object Lifecycle Policies on the `my-finance-view-backups` bucket so that the workflow code is not the source of truth for retention. The required lifecycle is: `daily/` retains 30 days, `weekly/` retains 90 days, `monthly/` retains 365 days, **`pre-op/` retains 90 days** (B5 fix — was 30, raised to cover slow-discovery migration bugs), **`quarantine/` retains 365 days** (M15 fix — verify-failed artefacts retained long enough for forensic inspection). Promotion of daily artefacts into `weekly/` and `monthly/` SHALL be performed by the daily workflow on Sundays and on the first day of each month respectively, by server-side copy via `rclone copyto`.
+The system SHALL define ONE R2 Object Lifecycle Policy on the `my-finance-view-backups` bucket — `myfinance-daily-30d` deleting objects under `daily/` after 30 days — so that the workflow code is not the source of truth for retention of the highest-churn prefix. **v1 scope cut (operator decision 2026-06-01):** the four other prefixes (`weekly/`, `monthly/`, `pre-op/`, `quarantine/`) accumulate without expiry; rationale (YAGNI on a single-user system whose projected annual volume per prefix sits inside R2's 10 GB free tier) and the compensating monthly `rclone size pre-op/` spot-check are documented in `design.md` Decision 3. Promotion of daily artefacts into `weekly/` and `monthly/` SHALL still be performed by the daily workflow on Sundays and on the first day of each month respectively, by server-side copy via `rclone copyto` — the promotions are unchanged; only the lifecycle expiry is deferred.
 
-#### Scenario: Lifecycle rules match the documented retention
+#### Scenario: Single lifecycle rule covers daily/ only (v1)
 
 - **WHEN** the operator inspects the bucket lifecycle configuration in the Cloudflare R2 dashboard or via API
-- **THEN** there is one rule per prefix `daily/`, `weekly/`, `monthly/`, `pre-op/`, `quarantine/` and the configured day counts equal 30, 90, 365, **90**, **365** respectively
+- **THEN** there is exactly ONE rule, `myfinance-daily-30d`, with prefix filter `daily/` and a 30-day deletion action. The `weekly/`, `monthly/`, `pre-op/`, and `quarantine/` prefixes have NO lifecycle rule (they accumulate; spot-checked monthly per `design.md` Decision 3)
 
 #### Scenario: Sunday daily run promotes a weekly copy
 
@@ -149,7 +149,7 @@ The system SHALL define R2 Object Lifecycle Policies on the `my-finance-view-bac
 #### Scenario: R2 transient outage during status upsert is fatal to the run (finding #14 fix)
 
 - **WHEN** `backup-daily.sh` completes pg_dump + tar + age + upload + sha256 re-verify + chained verify GREEN, and then `status/last-success.json` upsert (step 4.3.10) returns a non-2xx from R2 (e.g. transient 5xx, network timeout)
-- **THEN** the worker MUST treat the status-upsert failure as a fatal step: log the failure, dispatch the ntfy + Gmail alert, AND exit non-zero. The Kuma success push MUST NOT be sent on the failure path. Rationale: a green verify with a failed status-write produces an artefact in R2 that the watchdog cannot discover the next morning — the watchdog reads `status/last-success.json` and finds it stale, triggering a false-positive "STALE" alert. Treating the upsert as fatal collapses the failure into the existing alert path (operator sees one explicit alert, no surprise "STALE" the next day). The in-cluster dead-man-switch (Kuma) correctly does NOT receive the success heartbeat, so it will also fire after grace — multiple signals, all consistent.
+- **THEN** the worker MUST treat the status-upsert failure as a fatal step: log the failure, dispatch the ntfy + Resend alert, AND exit non-zero. Rationale: a green verify with a failed status-write produces an artefact in R2 that no later mechanism can discover as fresh. Treating the upsert as fatal collapses the failure into the existing alert path (operator sees one explicit alert via ntfy + Resend). **v1 (operator decision 2026-06-01):** the in-cluster Watchdog + Kuma layer that previously also caught this case via stale-detection was removed; the explicit ntfy + Resend dispatch is now the only signal for a green-verify-but-stale-status failure.
 
 #### Scenario: Same-day re-run of daily workflow is idempotent
 
@@ -168,7 +168,7 @@ The system SHALL provide an automated restore-verification workflow that runs **
 #### Scenario: Verification fails when transactions row count is implausible
 
 - **WHEN** the verification runs against a snapshot where `myfinance.transactions` returns fewer than 300 rows
-- **THEN** the script exits non-zero, `status/last-verify.json` records the failing probe, the artefact is moved to `quarantine/`, and both alert legs engage (ntfy + Gmail explicit fire; Kuma receives no success heartbeat for the daily run)
+- **THEN** the script exits non-zero, `status/last-verify.json` records the failing probe, the artefact is moved to `quarantine/`, and both v1 alert legs engage (ntfy + Resend explicit fire)
 
 #### Scenario: Verification probe suite does NOT include latest_transaction_age_days (B3 fix)
 
@@ -219,61 +219,51 @@ The system SHALL maintain a separate R2 prefix `quarantine/` for snapshots that 
 - **WHEN** a daily snapshot uploads, sha256 re-verify passes, but the chained restore-verify fails
 - **THEN** the artefact is moved server-side from `daily/` to `quarantine/<timestamp>-daily-<original-name>`; `status/last-success.json` is NOT updated (the daily run is recorded as failed); `status/last-verify.json` is updated with the failing probe; alerts fire
 
-#### Scenario: Quarantine retention is 365 days
+#### Scenario: Quarantine has no lifecycle rule in v1 (accepted gap)
 
 - **WHEN** the operator inspects the bucket lifecycle configuration for the `quarantine/` prefix
-- **THEN** the configured day count is 365 — long enough for forensic inspection without growing the bucket unbounded
+- **THEN** there is NO lifecycle rule on the prefix — v1 deliberately defers the `quarantine/` 365d rule together with the `weekly/` / `monthly/` / `pre-op/` rules per the v1 Retention policy Requirement and `design.md` Decision 3. **Accepted gap (operator decision 2026-06-01):** quarantined artefacts accumulate at projected volume ≈0 GB/yr (only a verify-failure event populates this prefix); the prefix is included in the monthly `rclone size` spot-check at `tasks.md` §10.5
 
 #### Scenario: Same-day quarantine-then-success is visible in status (finding #10 fix)
 
 - **WHEN** a daily run produces a quarantined artefact (upload OK but verify failed → moved to `quarantine/`) AND a later same-day re-run succeeds with verify green and overwrites `daily/YYYY-MM-DD.tar.age` in place
 - **THEN** `status/last-success.json` for the day MUST include the keys `previousFailedAttempts: <int >= 1>` and `quarantinedArtefacts: ["quarantine/<timestamp>-daily-<file>", …]` listing the quarantined sibling(s). A reader who later inspects only `status/last-success.json` MUST be able to discover that the day had at least one failed attempt before the green success — without these fields, "green green green" in the status log would hide that something was wrong earlier in the day and the operator would never investigate the quarantined artefact. **Key naming convention (M4 fix from replant adversarial review, scope clarified for finding N2):** all JSON keys in (a) `status/*.json` files AND (b) sidecar success-response bodies use camelCase (`previousFailedAttempts`, `quarantinedArtefacts`, `lastSuccess`, `lastVerify`, `lastPreop`, `lastDrill`, `paperIntact`, `snapshotUsed`, `operatorInitial`, `verifyResult`, `allPassed`) — chosen for consistency with JavaScript convention used by the runner's `/status` endpoint. Sidecar ERROR-response bodies retain snake_case for legacy keys (`local_sha256`, `r2_sha256`, `quarantined_to`, `verify_failed`, `upload_corrupted`) — code at `scripts/backup/workers/backup-preop.sh:118,149` already writes these and the existing Scenarios at the Manual on-demand pre-operation snapshot Requirement reference them by name; a future bounded normalization change MAY sweep these to camelCase, but Phase 1 ships with the existing convention. Any NEW error field added by future work SHOULD use camelCase.
 
-### Requirement: Three-leg alerting (ntfy.sh + Gmail SMTP + Uptime Kuma)
+### Requirement: Two-leg alerting (ntfy.sh + Resend HTTP API) — v1
 
-The system SHALL dispatch alerts on every failure path through THREE independent channels (v3 Gate C cut M1 retracted the original fourth leg — healthchecks.io off-VPS pinger — see `openspec/changes/supabase-backup-policy/proposal.md ## Threat model`):
+The system SHALL dispatch alerts on every failure path through TWO independent explicit channels (v1 scope cut 2026-06-01: the v3 Uptime Kuma in-cluster dead-man-switch and the previously-deferred healthchecks.io off-VPS pinger are both deferred; Gmail SMTP is replaced with Resend transactional email — see `openspec/changes/supabase-backup-policy/proposal.md ## Threat model` and `design.md` Decision 7):
 
-1. **Explicit-dispatch from inside the VPS** — ntfy.sh push + Gmail SMTP email, both fired in parallel by the worker as long as the runner has outbound internet. Triggered when (a) the daily backup script exits non-zero, (b) the restore-verify script exits non-zero, (c) the watchdog detects stale `status/last-success.json` or `status/last-verify.json`, or (d) the n8n `MyFinanceBackup-ErrorHandler` fires.
-2. **In-cluster dead-man-switch** — Uptime Kuma Push Monitor. The daily worker pings the Kuma push URL on success; the absence of a ping (heartbeat 24 h + grace 6 h = 30 h) triggers Kuma to fire its own alerts via channels wired inside Kuma. Catches the case where the workflow itself never ran.
+1. **ntfy.sh push** — HTTP POST to `https://ntfy.sh/<unguessable-topic>` from the worker's `dispatch_alert` helper or the n8n `MyFinanceBackup-DispatchAlert` sub-workflow.
+2. **Resend transactional email** — HTTP POST to `https://api.resend.com/emails` with `Authorization: Bearer $MYFINANCE_BACKUP_RESEND_API_KEY` and JSON body `{from, to, subject, text}` where `from=alerts@datachefnow.com` (verified domain in Resend us-east-1) and `to=<operator-inbox>`. Both channels are fired in parallel by the worker (or the DispatchAlert sub-workflow) as long as the runner has outbound internet. Triggered when (a) the daily backup script exits non-zero, (b) the restore-verify script exits non-zero, or (c) the n8n `MyFinanceBackup-ErrorHandler` fires.
 
-The ntfy topic SHALL be stored as n8n credential `MYFINANCE_BACKUP_NTFY_TOPIC`. The Gmail App Password SHALL be stored as n8n credential `MYFINANCE_BACKUP_GMAIL_APP_PASSWORD`. The Kuma push URL SHALL be stored as `MYFINANCE_BACKUP_KUMA_PUSH_URL`. None of these URLs/tokens MAY be committed to the repository (each carries an unguessable secret). Successful runs SHALL NOT dispatch any explicit-channel alert; they push Kuma only.
+The ntfy topic SHALL be stored as n8n credential `MYFINANCE_BACKUP_NTFY_TOPIC`. The Resend API key SHALL be stored as n8n credential `MYFINANCE_BACKUP_RESEND_API_KEY` (scope `Sending access` only). The sender and recipient addresses SHALL be stored as `MYFINANCE_BACKUP_ALERT_FROM` and `MYFINANCE_BACKUP_ALERT_TO`. None of these tokens or URLs MAY be committed to the repository. Successful runs SHALL NOT dispatch any explicit-channel alert.
 
-**Whole-VPS outage compensating signal (v3 Gate C cut M1 rationale):** the parallel Gmail-ingest workflow that already runs on the same VPS for normal MyFinanceView operation acts as a secondary signal for whole-VPS outage — if Gmail ingestion stops, the operator notices within hours from missing transaction notifications. This is weaker than a dedicated off-VPS pinger but deemed sufficient for the operator's threat model. If Kuma alone proves insufficient in practice (e.g. an outage where Gmail ingest is also paused), a bounded follow-up change MAY reinstate healthchecks.io.
+**Whole-VPS outage compensating signal (v1, operator decision 2026-06-01):** the operator's existing external uptime monitor on `n8n.datachefnow.com` is the host-down signal. The parallel Gmail-ingest workflow's Telegram silence remains a secondary cue. **Failure modes uncovered in v1:** (a) silent Schedule-Trigger non-fire of `MyFinanceBackup-Daily` while VPS is up — no in-cluster watchdog to detect it; (b) full-VPS outage producing no in-cluster alert — covered by external uptime monitor only. Both Kuma (in-cluster) and healthchecks.io (off-VPS) were considered and deferred; reinstating either is a bounded follow-up if a silent non-fire is ever observed in production.
 
-#### Scenario: Failed daily run dispatches both explicit legs
+#### Scenario: Failed daily run dispatches both v1 explicit legs
 
 - **WHEN** `workers/backup-daily.sh` exits non-zero inside the n8n workflow
-- **THEN** a single `POST` to `https://ntfy.sh/<topic>` is made with title `MyFinance backup FAILED` and a body containing the last 20 lines of the log, AND a single email is sent via Gmail SMTP from `aftorresl01@gmail.com` to `aftorresl01@gmail.com` with the same subject and the full log
-
-#### Scenario: Watchdog fires when daily run is stale
-
-- **WHEN** the `MyFinanceBackup-Watchdog` workflow calls `GET /status` on the runner and the response indicates `lastSuccess` is null OR `(now - lastSuccess.timestamp) > 30 hours` (the runner's `/status` reads R2 `status/last-success.json` as the canonical source — M14 fix)
-- **THEN** the workflow invokes the shared Dispatch Alert sub-workflow with title `MyFinance backup STALE`, dispatching both an ntfy `POST` and an email
+- **THEN** a single `POST` to `https://ntfy.sh/<topic>` is made with title `MyFinance backup FAILED` and a body containing the last 20 lines of the log, AND a single Resend HTTP `POST` to `https://api.resend.com/emails` is made with `from=alerts@datachefnow.com`, `to=<operator-inbox>`, the same subject, and the full log
 
 #### Scenario: Successful run does not alert
 
 - **WHEN** `workers/backup-daily.sh` exits 0
-- **THEN** no `POST` to `ntfy.sh` is made, no email is sent, and `status/status.log` on R2 gains exactly one new line recording the success
+- **THEN** no `POST` to `ntfy.sh` is made, no Resend email is sent, and `status/status.log` on R2 gains exactly one new line recording the success
 
-#### Scenario: ntfy outage does not block the email
+#### Scenario: ntfy outage does not block the Resend email
 
 - **WHEN** a failure occurs and the `ntfy.sh` POST fails (e.g. HTTP 5xx or network timeout)
-- **THEN** the email is still dispatched, the n8n workflow records both attempts, and the overall workflow status reflects the alert delivery state
+- **THEN** the Resend HTTP request is still dispatched (parallel fan-out with Continue On Fail = true on both channels), the n8n workflow records both attempts, and the overall workflow status reflects the alert delivery state
 
-#### Scenario: Explicit channels failed — Kuma still fires on the dead-man path
+#### Scenario: Both channels failing produces no alert (v1 accepted gap)
 
-- **WHEN** a backup run fails AND both the ntfy POST and the Gmail SMTP send fail in the same alert dispatch
-- **THEN** the worker still exits non-zero (the daily run is recorded as failed); no Kuma success push is emitted; Kuma's 30 h grace elapses and fires its own alert via channels wired inside Kuma. The dead-man channel reaches the operator independently of ntfy/Gmail
+- **WHEN** a backup run fails AND both the ntfy POST and the Resend HTTP POST fail in the same dispatch
+- **THEN** the worker still exits non-zero (the daily run is recorded as failed) and `status/last-success.json` is not updated. **v1 accepted gap:** there is no in-cluster dead-man-switch to fire on absence-of-success — the operator's external uptime monitor on `n8n.datachefnow.com` is the only fallback signal at this point. Reinstating Kuma or healthchecks.io is a bounded follow-up if this gap ever fires in practice.
 
-#### Scenario: Successful daily run pushes Kuma
+#### Scenario: Resend credential carries a Sending-access-only API key
 
-- **WHEN** `backup-daily.sh` completes all steps including chained restore-verify with exit 0
-- **THEN** the worker issues exactly one `GET <MYFINANCE_BACKUP_KUMA_PUSH_URL>?status=up&msg=ok&ping=<elapsed_ms>`. The push is fire-and-forget (a non-2xx Kuma response is logged but does not fail the run, since the backup itself already succeeded by this point)
-
-#### Scenario: SMTP credential is pinned to Gmail STARTTLS
-
-- **WHEN** the operator inspects the n8n SMTP credential used by the alerting sub-workflow
-- **THEN** the configured fields are exactly `host=smtp.gmail.com`, `port=587`, `secure=false` (STARTTLS upgrade), `user=aftorresl01@gmail.com`, `password=<MYFINANCE_BACKUP_GMAIL_APP_PASSWORD>` (M13 fix — under-specified credential shape is closed by pinning these four fields)
+- **WHEN** the operator inspects the n8n credential `MYFINANCE_BACKUP_RESEND_API_KEY` and the corresponding Resend dashboard entry
+- **THEN** the API key's scope is `Sending access` only (no domain or audience management), the sender is bound to the verified `datachefnow.com` domain (`alerts@datachefnow.com`), and the key is revocable from the Resend dashboard without rotating any other system credential
 
 ### Requirement: Process gate is documentation-only (B6 fix — not BREAKING, not enforced)
 
@@ -302,17 +292,17 @@ A backup policy whose restore procedure has only been exercised once at bootstra
 
 Each drill MUST cover: (a) retrieving the primary paper from physical location A and visually confirming it is still legible; (b) on a clean machine (e.g. a fresh Docker container, a recently-formatted laptop, or the operator's PC after confirming the on-disk identity is the same as the paper), typing the primary identity by hand and decrypting one historical snapshot end-to-end as proof of the recovery path; (c) re-printing the paper if smudged, water-damaged, or otherwise degraded.
 
-The drill outcome SHALL be recorded by writing a JSON blob to `r2://my-finance-view-backups/status/last-drill.json` containing `{"timestamp":"<ISO-8601 UTC>","paperIntact":<bool>,"reprinted":<bool>,"snapshotUsed":"<r2-path>","operatorInitial":"<AT>"}`. The watchdog SHALL include a stale-drill probe: if `last-drill.json` is missing OR its timestamp is older than 400 days (12-month cadence + 35-day grace), the watchdog SHALL dispatch a `MyFinance backup drill OVERDUE` alert via the shared Dispatch Alert sub-workflow. The overdue alert is a low-severity reminder, NOT a daily-run failure — the daily pipeline continues to run, but the operator is reminded that the recovery path has not been exercised within the cadence.
+The drill outcome SHALL be recorded by writing a JSON blob to `r2://my-finance-view-backups/status/last-drill.json` containing `{"timestamp":"<ISO-8601 UTC>","paperIntact":<bool>,"reprinted":<bool>,"snapshotUsed":"<r2-path>","operatorInitial":"<AT>"}`. **v1 (operator decision 2026-06-01):** the cadence cue is the annual calendar reminder set up at `tasks.md §10.6`; the previous Watchdog-based `MyFinance backup drill OVERDUE` automated alert was removed together with the Watchdog workflow (which itself was removed when Uptime Kuma was deferred). `last-drill.json` on R2 remains the operator's record of the most recent drill, surfaced via the runner's `/status` endpoint if anyone polls it ad-hoc, but no automated workflow fires when it goes stale in v1.
 
 #### Scenario: status/last-drill.json is upserted after each drill
 
 - **WHEN** the operator completes a drill and uploads the JSON blob via `rclone copy` to `r2://my-finance-view-backups/status/last-drill.json`
 - **THEN** the file is present at that path with the required keys (`timestamp`, `paperIntact`, `reprinted`, `snapshotUsed`, `operatorInitial`); `paperIntact` is `true` on a healthy drill
 
-#### Scenario: Watchdog flags an overdue drill
+#### Scenario: Drill cadence is calendar-only in v1 (no automated overdue alert)
 
-- **WHEN** the `MyFinanceBackup-Watchdog` workflow runs and `r2://my-finance-view-backups/status/last-drill.json` is missing OR its `timestamp` is older than 400 days from the current UTC time
-- **THEN** the watchdog invokes the shared Dispatch Alert sub-workflow with title `MyFinance backup drill OVERDUE` and a body pointing at `scripts/backup/README.md §2.5.7`; the alert fires on every watchdog tick until a fresh drill JSON is uploaded — the operator can dismiss it by completing the drill, not by suppressing the alert
+- **WHEN** `r2://my-finance-view-backups/status/last-drill.json` is missing OR its `timestamp` is older than 400 days
+- **THEN** no automated alert fires — v1 deliberately has no Watchdog workflow (deferred together with Uptime Kuma; operator decision 2026-06-01). The cadence cue is the annual calendar reminder set up at `tasks.md §10.6` (e.g. January 15th every year); the operator's reminder mechanism is calendar-owned, not n8n-owned. Reinstating an automated drill-overdue alert is a bounded follow-up if the calendar reminder slips
 
 #### Scenario: Drill reveals a degraded paper and re-print is recorded
 
@@ -323,13 +313,13 @@ The drill outcome SHALL be recorded by writing a JSON blob to `r2://my-finance-v
 
 The backup pipeline of this change SHALL document explicitly what is NOT captured by daily snapshots, so an operator restoring from these snapshots into a fresh Supabase project does not silently lose state they assumed was protected. The acknowledged gaps and their compensating documentation are:
 
-1. **RLS policies on `myfinance.*`** — `pg_dump -n myfinance -Fc` DOES capture row-level security policies as part of the schema dump (verifiable by `pg_restore --list | grep POLICY`). The watchdog SHALL include a one-time documented check during the initial smoke-test that confirms restored RLS policies match the production count (`SELECT count(*) FROM pg_policies WHERE schemaname='myfinance'`).
+1. **RLS policies on `myfinance.*`** — `pg_dump -n myfinance -Fc` DOES capture row-level security policies as part of the schema dump (verifiable by `pg_restore --list | grep POLICY`). The operator SHALL perform a one-time documented check during the initial bootstrap smoke-test (`tasks.md` §9.x) that confirms restored RLS policies match the production count (`SELECT count(*) FROM pg_policies WHERE schemaname='myfinance'`). **v1 note (operator decision 2026-06-01):** the previous wording attributed this check to the Watchdog workflow, which has been dropped together with Uptime Kuma; the check moves to operator discipline executed during initial bootstrap.
 2. **Supabase Auth state beyond `auth.users(id)` rows** — Supabase Vault secrets, `auth.identities`, `auth.mfa_factors`, `auth.sessions`, OAuth provider config, JWT signing keys: NOT backed up. Recovery into a fresh project means re-establishing auth from scratch (single user, low cost). Documented in `scripts/backup/README.md §2.5.6`.
 3. **n8n workflow definitions** — committed in `scripts/backup/n8n/*.json` but only as last-export snapshots; if the operator edits a workflow in the UI without re-exporting, those edits are lost on VPS rebuild. Compensating control: re-export workflows from n8n UI before any commit that touches `scripts/backup/n8n/`. **Note:** Phase 2 (`plans/2026-05-31-supabase-backup-multi-tenant-design.md`) plans to add n8n state itself as a backed-up "project" using a dedicated `workers/backup-n8n.sh`, which closes this gap operationally; until Phase 2 lands the operator habit is the only mitigation.
 4. **Edge Functions** — not used by this project yet. Listed for future-coverage acknowledgement.
 5. **Storage buckets** — not used by this project yet. Listed for future-coverage acknowledgement.
-6. **VPS-side state** — `.env.local`, rclone config (entrypoint shim materializes it from env), Docker volumes for n8n and Uptime Kuma: NOT in this backup. The operator's responsibility to re-create from documentation in `scripts/backup/README.md §2.5.3`. **Traefik dynamic config does NOT exist in this change** (v3 Gate C cut M3 removed the public pre-op webhook, which was the only Traefik dynamic file this change would have introduced); the static n8n Traefik route is the operator's responsibility outside this repo and is unchanged.
-7. **External account credentials** — Cloudflare R2 API token, Gmail App Password, Kuma push URL, ntfy topic, runner shared secret: stored in a password manager and in n8n credentials; NOT in this backup. Rotation procedure in `scripts/backup/README.md §2.5.5`.
+6. **VPS-side state** — `.env.local`, rclone config (entrypoint shim materializes it from env), Docker volumes for n8n: NOT in this backup. The operator's responsibility to re-create from documentation in `scripts/backup/README.md §2.5.3`. **v1 (operator decision 2026-06-01):** Uptime Kuma is no longer part of the stack for this change (Kuma in-cluster dead-man-switch dropped), so its Docker volume is also out of scope. **Traefik dynamic config does NOT exist in this change** (v3 Gate C cut M3 removed the public pre-op webhook; v1 confirms no Traefik IP allowlist either) — the static n8n Traefik route is the operator's responsibility outside this repo and is unchanged.
+7. **External account credentials (v1)** — Cloudflare R2 API token, **Resend API key**, ntfy topic, runner shared secret: stored in a password manager and in n8n credentials; NOT in this backup. Rotation procedure in `scripts/backup/README.md §2.5.5`. **Dropped in v1 (operator decision 2026-06-01):** Gmail App Password (replaced by Resend), Kuma push URL (Kuma dropped).
 
 #### Scenario: Coverage gaps are documented in the operator runbook
 
@@ -348,13 +338,13 @@ The system SHALL place all backup-related artefacts under `scripts/backup/` with
 - `Dockerfile.runner` — image definition for the `myfinance-backup-runner` sidecar (Node 22 Alpine + `postgresql17-client` + `age` + `rclone` + `docker-cli` + `tar` + `curl` + `jq` + `tini` + `util-linux` for `uuidgen`). The Dockerfile MUST also install an entrypoint shim that materializes the rclone remote definition `[r2]` from the runtime `BACKUP_R2_*` env vars (populates `RCLONE_CONFIG_R2_TYPE`, `RCLONE_CONFIG_R2_PROVIDER`, `RCLONE_CONFIG_R2_ACCESS_KEY_ID`, `RCLONE_CONFIG_R2_SECRET_ACCESS_KEY`, `RCLONE_CONFIG_R2_ENDPOINT`) so `rclone` resolves `r2:` without requiring a host-side `rclone.conf` bind-mount.
 - `docker-compose.yml` — compose extension that defines the `myfinance-backup-runner` service, joins it to `n8n_net`, bind-mounts `/var/lib/myfinance-backup` and `/var/run/docker.sock`, declares the tmpfs at `/var/lib/myfinance-verify`, and reads its environment from the operator's `.env.local` on the VPS.
 - `runner/` — Node + Express HTTP server: `package.json`, `package-lock.json`, `server.js`, `auth.js` (shared-secret middleware), `mutex.js` (in-process run serialization), `workers.js` (spawn + stream bash workers + scrubs the age identity from child env and writes it to the child's stdin pipe), `docker-entrypoint.sh` (rclone config shim — see Dockerfile.runner).
-- `workers/backup-daily.sh` — bash worker invoked by `POST /run/daily`. Performs `pg_dump`, tar, age (single recipient), rclone upload, **post-upload SHA-256 re-verify**, weekly/monthly server-side promotion, **chained restore-verify (reviewer Q2)**, quarantine-routing on failure, `status/last-success.json` upsert, and Uptime Kuma push.
+- `workers/backup-daily.sh` — bash worker invoked by `POST /run/daily`. Performs `pg_dump`, tar, age (single recipient), rclone upload, **post-upload SHA-256 re-verify**, weekly/monthly server-side promotion, **chained restore-verify (reviewer Q2)**, quarantine-routing on failure, and `status/last-success.json` upsert. **v1 (operator decision 2026-06-01):** no Uptime Kuma success push (Kuma layer dropped; see proposal.md ## Threat model and design.md Decision 7).
 - `workers/backup-preop.sh` — bash worker invoked by `POST /run/preop`. Performs the same upload pipeline including post-upload SHA-256 re-verify, then invokes the verify worker against the just-uploaded artefact; on any failure, moves the artefact to `quarantine/` server-side.
 - `workers/verify-restore.sh` — bash worker invoked by `POST /run/verify` and chained from `backup-preop.sh` / `backup-daily.sh`. Reads the primary age identity from stdin, writes it to a tmpfs file (mode 0600, trap-deleted), spawns ephemeral `postgres:17` with UUID-derived name, waits for Docker DNS + `pg_isready`, pre-creates `auth` schema + stub `auth.users(id uuid)`, restores in order (auth-data, then myfinance), runs probe SQL (NO `latest_transaction_age_days`), tears down, exits non-zero on any failure.
-- `workers/alert.sh` — shared library sourced by other workers; emits ntfy push + Gmail SMTP email on failure (both fire in parallel).
+- `workers/alert.sh` — shared library sourced by other workers; emits ntfy push + **Resend HTTP API email** on failure (both fire in parallel). v1 cut (2026-06-01): Gmail SMTP replaced with Resend HTTP API.
 - `verify-queries.sql` — the probe SQL suite with documented thresholds and a header comment explaining the smoke-detector-not-alarm semantics.
 - `recipients/primary.txt` — the single age recipient public key bound to this project (v3 Gate C cut B1 — the v2 `recipients/recovery.txt` is intentionally absent).
-- `n8n/MyFinanceBackup-Daily.json`, `n8n/MyFinanceBackup-PreOp.json`, `n8n/MyFinanceBackup-Watchdog.json`, `n8n/MyFinanceBackup-ErrorHandler.json`, `n8n/MyFinanceBackup-DispatchAlert.json` — **five** exported n8n workflows for version control and import (reviewer Q2 fix — the separate weekly `MyFinanceBackup-VerifyRestore` workflow is REMOVED; verify is now chained inside the daily run). `MyFinanceBackup-DispatchAlert` is the shared sub-workflow that fans out alerts to ntfy + Gmail; the other four workflows invoke it via Execute Workflow nodes. `MyFinanceBackup-PreOp` is manual-trigger only (v3 Gate C cut M3 — no public webhook).
+- `n8n/MyFinanceBackup-Daily.json`, `n8n/MyFinanceBackup-PreOp.json`, `n8n/MyFinanceBackup-ErrorHandler.json`, `n8n/MyFinanceBackup-DispatchAlert.json` — **four** exported n8n workflows for version control and import in v1 (reviewer Q2 fix — the separate weekly `MyFinanceBackup-VerifyRestore` workflow is REMOVED; verify is now chained inside the daily run). **v1 scope cut (operator decision 2026-06-01):** `MyFinanceBackup-Watchdog.json` is REMOVED — the in-cluster Watchdog was dropped together with Uptime Kuma; the operator's external uptime monitor on `n8n.datachefnow.com` is the host-down signal. `MyFinanceBackup-DispatchAlert` is the shared sub-workflow that fans out alerts to ntfy + Resend; the other three workflows invoke it via Execute Workflow nodes. `MyFinanceBackup-PreOp` is manual-trigger only (v3 Gate C cut M3 — no public webhook).
 - `README.md` — operator runbook (install, recover, rotate age key, smoke test, annual disaster drill).
 
 All shell scripts MUST be `bash` compatible (Linux), MUST start with `set -euo pipefail` (within the first few non-shebang lines, after `_common.sh` sourcing), and MUST be executable in the repository.
@@ -395,7 +385,7 @@ The system SHALL expose a `myfinance-backup-runner` container on the Docker netw
 
 - `GET /healthz` — liveness only. No authentication. Returns `200` with body `{"status":"ok","version":"<git-sha-or-tag>"}` whenever the process is running, including during an in-flight run.
 - `GET /status` — read-only status. No authentication. Returns `200` with body `{"lastSuccess":{...}|null,"lastPreop":{...}|null,"lastVerify":{...}|null,"lastDrill":{...}|null}` derived from **R2 (`r2:my-finance-view-backups/status/{last-success,last-preop,last-verify,last-drill}.json`)** which is the canonical source of truth — NOT from the runner's local cache. The `lastDrill` key surfaces `status/last-drill.json` for the disaster-drill watchdog (finding #5 fix); when the file is missing the runner returns `lastDrill: null` rather than 404. If R2 is unreachable the endpoint returns `503 {"error":"r2_unreachable"}` so the Watchdog treats stale-data as a workflow error rather than a false-OK.
-- `POST /run/daily` — triggers the daily backup pipeline (pg_dump → tar → age (single recipient) → rclone upload → post-upload SHA-256 re-verify → weekly/monthly promote → chained restore-verify → Kuma push). Synchronous. Typical duration 3–6 min.
+- `POST /run/daily` — triggers the daily backup pipeline (pg_dump → tar → age (single recipient) → rclone upload → post-upload SHA-256 re-verify → weekly/monthly promote → chained restore-verify → status JSON upsert). v1 (2026-06-01): no Kuma success push (Kuma layer dropped). Synchronous. Typical duration 3–6 min.
 - `POST /run/preop` — body `{"reason":"<slug>"}` where the slug matches `^[A-Za-z0-9._+-]{3,60}$`. Triggers the upload pipeline (with post-upload SHA-256 re-verify) AND the full restore-verify chain. Synchronous. Typical duration 3–5 min.
 - `POST /run/verify` — triggers a standalone restore-verify of the newest object under `daily/`, OR of a specific target if `{"target":"<r2-path>"}` is supplied in the body. Synchronous. Available for operator-initiated ad-hoc verification; no longer triggered by a scheduled n8n workflow (reviewer Q2 fix — verify is now chained inside the daily run).
 
@@ -428,31 +418,25 @@ All `POST` endpoints SHALL require the header `X-Runner-Secret` whose value equa
 
 #### Scenario: Status endpoint returns runner state without authentication
 
-- **WHEN** the `MyFinanceBackup-Watchdog` workflow issues `GET /status` on its schedule
-- **THEN** the response is `200` with the last-success timestamp readable from `lastSuccess.timestamp`, allowing the watchdog to compute freshness without holding a credential
+- **WHEN** any in-cluster client (operator running `docker exec n8n curl http://myfinance-backup-runner:8080/status` for ad-hoc inspection, or a future Watchdog workflow if reinstated) issues `GET /status`
+- **THEN** the response is `200` with the last-success timestamp readable from `lastSuccess.timestamp`. **v1 (operator decision 2026-06-01):** there is no scheduled in-cluster consumer of `/status` (Watchdog dropped); the endpoint remains exposed for operator-eyeball usage and as the surface a future reinstated Watchdog or Kuma would consume
 
-### Requirement: Uptime Kuma Push Monitor (in-cluster dead-man-switch)
+### Requirement: No in-cluster dead-man-switch in v1 (Kuma deferred)
 
-The system SHALL emit a success heartbeat to a self-hosted Uptime Kuma Push Monitor on every completed daily run. The push URL SHALL be stored as the n8n credential `MYFINANCE_BACKUP_KUMA_PUSH_URL`, surfaced as a placeholder in `.env.example`, and MUST NOT be committed to the repository (it carries an unguessable token equivalent to a secret). The Kuma monitor SHALL be configured with heartbeat interval = 24 hours and grace period = 6 hours, so a missing push for more than 30 hours triggers a Kuma-side alert through whichever channels the operator has wired inside Kuma. **The Kuma monitor MUST have AT LEAST ONE downstream notification channel wired before this change activates (finding #8 fix);** permissible channels include Telegram, Discord, Gmail SMTP, ntfy.sh, or any generic webhook supported by Kuma. A Kuma monitor without a wired channel detects the missed heartbeat in its UI but pages no one — that silent-Kuma failure mode is precisely what this Requirement forbids.
+The system SHALL NOT include the Uptime Kuma Push Monitor in v1. **v1 scope cut (operator decision 2026-06-01):** the in-cluster dead-man-switch (Kuma) and the previously-deferred off-VPS dead-man-switch (healthchecks.io) are both deferred. The operator's existing external uptime monitor on `n8n.datachefnow.com` covers the host-down case the Kuma layer was meant to cover; YAGNI on duplicating it inside the cluster.
 
-The Kuma push is the **in-cluster dead-man-switch** leg of the three-leg alerting (alongside ntfy.sh and Gmail SMTP). It specifically covers the scenario where the n8n workflow never ran but the VPS itself is alive. A failure of the daily run SHALL NOT push to Kuma (the absence of the ping is what makes Kuma alert); explicit ntfy + Gmail alerts still fire from the worker as long as the runner can reach the internet. The whole-VPS-outage case is NOT covered by Kuma alone (Kuma is on the same VPS); the operator accepts that compensating signal under v3 comes from the parallel Gmail-ingest workflow noticing the same outage (see Three-leg alerting Requirement rationale).
+**Failure modes uncovered in v1 (accepted by the operator):**
+1. **Silent Schedule-Trigger non-fire** — if n8n's cron silently fails to fire `MyFinanceBackup-Daily` while the VPS is up, no in-cluster signal fires. Detection path: operator eyeballs R2 freshness or notices the absence of the daily ntfy/Resend "success-not-fired" lack-of-noise.
+2. **Whole-VPS outage** — silences both ntfy + Resend dispatches simultaneously. Mitigation: the operator's external monitor on `n8n.datachefnow.com` detects the host-down case.
 
-#### Scenario: Successful daily run pushes to Kuma
+**Re-evaluation trigger:** if either failure mode above is observed in production, reinstating Kuma (in-cluster) or healthchecks.io (off-VPS) is a bounded follow-up change.
 
-- **WHEN** `workers/backup-daily.sh` completes all steps (pg_dump, encrypt, upload, sha256 re-verify, promote, chained verify) with exit 0
-- **THEN** the worker issues exactly one `GET <MYFINANCE_BACKUP_KUMA_PUSH_URL>?status=up&msg=ok&ping=<elapsed_ms>` request, and the response is treated as fire-and-forget (a non-2xx Kuma response is logged but does not fail the run, since the backup itself already succeeded)
+#### Scenario: No Kuma push URL is configured in v1
 
-#### Scenario: Failed daily run does NOT push success to Kuma
+- **WHEN** the developer inspects `.env.example` and `scripts/backup/n8n/*.json`
+- **THEN** no `MYFINANCE_BACKUP_KUMA_PUSH_URL` placeholder is present in `.env.example`, no Kuma push HTTP node is present in any n8n workflow, and `scripts/backup/workers/backup-daily.sh` contains NO branch that POSTs to a Kuma push URL on success
 
-- **WHEN** any step of `workers/backup-daily.sh` fails and the script exits non-zero
-- **THEN** no `status=up` push is sent to Kuma; the absence of the ping causes the Kuma monitor to fire its own alert once the grace period elapses
+#### Scenario: No Watchdog workflow is committed in v1
 
-#### Scenario: Kuma push URL is not committed to the repository
-
-- **WHEN** `git grep -E "https?://[^/]+/api/push/"` is executed against the repository working tree and history
-- **THEN** no matches exist outside `.env.example` (which holds only the placeholder, no token)
-
-#### Scenario: Kuma monitor has at least one downstream notification channel wired (finding #8 fix)
-
-- **WHEN** the operator opens the Kuma `MyFinance Daily Backup` Push Monitor's *Notifications* tab BEFORE setting any Schedule Trigger to Active (task 10.1)
-- **THEN** at least one notification channel is attached AND the operator has clicked Kuma's "Test" button against that channel and observed the test message arrive at its destination (Telegram message received, Discord message received, ntfy message received, email received, etc.). A monitor with zero wired channels — or with channels whose test never delivered — fails this Scenario and blocks change activation. This closes the silent-Kuma failure mode where a missed heartbeat would log in the Kuma UI but never page the operator
+- **WHEN** the developer lists `scripts/backup/n8n/`
+- **THEN** no `MyFinanceBackup-Watchdog.json` file is present — the watchdog that previously polled `/status` for staleness was dropped together with Kuma; the four committed workflow files are `MyFinanceBackup-Daily.json`, `MyFinanceBackup-PreOp.json`, `MyFinanceBackup-ErrorHandler.json`, `MyFinanceBackup-DispatchAlert.json`
