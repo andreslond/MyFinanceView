@@ -132,8 +132,13 @@ export BACKUP_R2_ACCOUNT_ID="smoke"
 export BACKUP_R2_ACCESS_KEY_ID="smoke"
 export BACKUP_R2_SECRET_ACCESS_KEY="smoke"
 export MYFINANCE_BACKUP_NTFY_TOPIC=""
-export MYFINANCE_BACKUP_GMAIL_APP_PASSWORD=""
-export MYFINANCE_BACKUP_KUMA_PUSH_URL=""
+# v1 (operator decision 2026-06-01): Resend HTTP API replaces Gmail SMTP; Uptime Kuma
+# dead-man-switch dropped. The runner / workers gracefully no-op these channels if
+# the env vars are empty — smoke leaves them empty so the failure-alert dispatcher
+# fires but does not actually hit external services.
+export MYFINANCE_BACKUP_RESEND_API_KEY=""
+export MYFINANCE_BACKUP_ALERT_FROM=""
+export MYFINANCE_BACKUP_ALERT_TO=""
 
 # Override recipients dir via a modified copy of backup-daily.sh
 # (or run with RECIPIENTS_DIR override if the script supports it)

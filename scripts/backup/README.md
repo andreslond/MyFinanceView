@@ -5,24 +5,21 @@
 This directory implements the automated backup and restore-verification pipeline for the
 MyFinanceView Supabase database (schema `myfinance` + `auth.users`).
 
-Key facts:
+Key facts (v1, operator decision 2026-06-01):
 - Runs as a sidecar container (`myfinance-backup-runner`) on the same VPS as n8n.
 - Produces `pg_dump --format=custom` snapshots encrypted with `age` (single recipient).
 - Stores encrypted snapshots on Cloudflare R2 (`my-finance-view-backups` bucket).
 - Chains a full restore-verify after every daily backup.
-- Alerts via ntfy.sh push + Gmail SMTP on any failure.
-- Monitors liveness via Uptime Kuma in-VPS dead-man-switch.
+- Alerts via **ntfy.sh push + Resend transactional email** (`alerts@datachefnow.com` on the verified `datachefnow.com` domain) in parallel on any failure.
+- **No in-cluster dead-man-switch in v1** (Uptime Kuma deferred); host-down detection relies on the operator's external uptime monitor on `n8n.datachefnow.com`.
 
 For the authoritative capability specification see:
 [`openspec/specs/database-backups/spec.md`](../../openspec/specs/database-backups/spec.md)
 (populated after `/opsx:archive`).
 
-**Scope note (v3, May 2026):** the original v2 spec included dual-recipient encryption
-(paper recovery key at a second physical location), healthchecks.io as off-VPS pinger,
-and a public pre-op webhook gated by Traefik IP allowlist. All three were cut under
-v3 Gate C triage because the threat model excludes the local-forensic adversary and
-the operator's single-user dataset does not justify the operational overhead. See
-`openspec/changes/supabase-backup-policy/proposal.md` "Threat model" section.
+**Scope notes:**
+- **v3 (May 2026):** dual-recipient encryption, healthchecks.io off-VPS pinger, and the public pre-op webhook with Traefik IP allowlist were all cut under Gate C triage. Local-forensic adversary out of threat model.
+- **v1 (June 2026):** R2 lifecycle rules reduced from 5 to 1 (only `daily/` 30d); alerting cut from 3 channels (ntfy + Gmail SMTP + Kuma) to 2 (ntfy + Resend HTTP API); Uptime Kuma in-VPS dead-man-switch and the `MyFinanceBackup-Watchdog` workflow dropped. See `openspec/changes/supabase-backup-policy/proposal.md` "Threat model" section and `design.md` Decisions 3 + 7.
 
 ---
 
@@ -47,9 +44,9 @@ n8n (Schedule 02:30 BOG) ──POST /run/daily──> myfinance-backup-runner:80
                                           verify-queries.sql probes
                                                   │
                                     status/last-success.json + last-verify.json → R2
-                                                  │
-                                          Kuma push ping
 ```
+
+**v1 (operator decision 2026-06-01):** no Kuma success push at the bottom of the success path — Kuma was dropped together with the `MyFinanceBackup-Watchdog` workflow. On failure, `dispatch_alert` fires ntfy + Resend in parallel; success is silent.
 
 **Single-recipient age encryption:**
 - `recipients/primary.txt` — baked into runner image; primary public key.
@@ -193,13 +190,16 @@ rm snapshot.tar
 |---|---|
 | **age primary identity** | Generate new key pair with `age-keygen`. Replace `recipients/primary.txt`. Rebuild + redeploy the runner image (key is baked in). Re-print paper and re-file at location A. Update n8n credential `MYFINANCE_BACKUP_AGE_IDENTITY` to the new primary identity. Old snapshots still decrypt with the old identity (keep the old paper until snapshots expire from R2 lifecycle policy). |
 | **R2 token** | Create new token in Cloudflare R2 dashboard. Update `BACKUP_R2_ACCESS_KEY_ID` and `BACKUP_R2_SECRET_ACCESS_KEY` in `scripts/backup/.env.local` and rclone config. Revoke old token. Restart runner. |
-| **Gmail App Password** | Revoke in Google account security settings. Generate new App Password. Update `MYFINANCE_BACKUP_GMAIL_APP_PASSWORD` in `.env.local` and n8n credential. Restart runner. |
-| **Kuma push URL** | In Uptime Kuma, regenerate the push URL for the `MyFinance Daily Backup` monitor. Update `MYFINANCE_BACKUP_KUMA_PUSH_URL` in `.env.local`. Restart runner. |
+| **Resend API key** | Revoke in the Resend dashboard (https://resend.com/api-keys). Generate a new key scoped to `Sending access` only on the verified `datachefnow.com` domain. Update `MYFINANCE_BACKUP_RESEND_API_KEY` in `.env.local` and n8n credential. Restart runner. Sender (`MYFINANCE_BACKUP_ALERT_FROM = alerts@datachefnow.com`) and recipient (`MYFINANCE_BACKUP_ALERT_TO`) do not rotate. |
+| **ntfy topic** | Generate a new unguessable 32+ char slug. Update `MYFINANCE_BACKUP_NTFY_TOPIC` in `.env.local` and n8n credential. Re-subscribe from operator phone. Restart runner. |
 | **Runner shared secret** | Generate a new 32-char secret. Update `MYFINANCE_BACKUP_RUNNER_SECRET` in `.env.local` AND in n8n credential. Restart runner. |
 
-**Notification channels wired to Kuma monitor:** document here which channel(s) the operator
-configured in Uptime Kuma (e.g. Telegram bot, Gmail SMTP, ntfy.sh). A monitor with no wired
-channel is silent on failure — the Kuma UI shows "Down" but the operator is never paged.
+**v1 cuts (operator decision 2026-06-01) — secrets no longer rotated:**
+- `MYFINANCE_BACKUP_GMAIL_APP_PASSWORD` — replaced by Resend.
+- `MYFINANCE_BACKUP_KUMA_PUSH_URL` — Uptime Kuma in-cluster dead-man-switch deferred.
+- `MYFINANCE_BACKUP_HEALTHCHECKS_URL` — off-VPS dead-man-switch deferred (was already deferred in v3).
+
+Reinstate any of these by re-adding the env var to `.env.example`, the corresponding worker/workflow wiring, AND a row to the table above.
 
 ---
 
@@ -238,5 +238,5 @@ Perform every January (calendar reminder set in tasks.md §10.6):
   rclone copy /tmp/last-drill.json r2:my-finance-view-backups/status/
   rm /tmp/last-drill.json
   ```
-  This upload resets the Watchdog's `drill OVERDUE` alert (task 7.4).
+  This upload records the drill on R2 for future audit. **v1 (operator decision 2026-06-01):** no automated `drill OVERDUE` alert (the Watchdog workflow at `tasks.md` §7.4 was dropped together with Uptime Kuma); the annual calendar reminder set up at `tasks.md` §10.6 is the only cadence cue.
 - [ ] Return envelope to location A.
