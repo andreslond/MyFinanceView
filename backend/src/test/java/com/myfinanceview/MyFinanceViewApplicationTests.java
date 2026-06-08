@@ -17,6 +17,7 @@ import static org.hamcrest.Matchers.hasKey;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+@org.springframework.context.annotation.Import(com.myfinanceview.config.TestJooqConfig.class)
 class MyFinanceViewApplicationTests {
 
     @LocalServerPort

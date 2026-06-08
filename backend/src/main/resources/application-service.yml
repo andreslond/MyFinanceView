@@ -1,0 +1,18 @@
+# Profile activated by service-layer integration tests that need a real DSLContext + Spring
+# TransactionManager wired around a Testcontainers Postgres. The base 'test' profile excludes
+# DataSourceAutoConfiguration / JooqAutoConfiguration so the lightweight auth/actuator tests
+# stay fast; this profile RE-ENABLES them by overriding the exclusion list to empty.
+#
+# Activation: @ActiveProfiles({"test", "service"}) on the test class. The 'service' profile MUST
+# be listed AFTER 'test' so its empty 'exclude' list wins.
+#
+# spring.datasource.{url,username,password} are injected at runtime via @DynamicPropertySource
+# in PostgresJooqIntegrationTestBase.
+spring:
+  autoconfigure:
+    exclude:
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+  jooq:
+    sql-dialect: POSTGRES

@@ -2,8 +2,6 @@ package com.myfinanceview.config;
 
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,15 +24,26 @@ import static org.assertj.core.api.Assertions.assertThat;
  * from backend/database/local/ then V001..V003 from backend/database/migrations/ in order. See
  * openspec/changes/archive/2026-05-13-backend-scaffolding/design.md D6 for the rationale behind the directory split.
  * The locator below walks up from cwd, so tests work whether run from repo root or from backend/.
+ *
+ * <p><b>Container lifecycle:</b> manual start (no {@code @Testcontainers} / {@code @Container}).
+ * The {@code @Testcontainers} extension calls {@code container.stop()} at class teardown which —
+ * on Windows Docker Desktop — kills the shared reused container and causes "Connection refused"
+ * in all later test classes that share the same container config. Ryuk handles JVM-exit cleanup.
  */
-@Testcontainers
 class PostgresTestcontainerTest {
 
-    @Container
+    // Manual lifecycle — intentionally NOT @Container + @Testcontainers. See class javadoc.
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17")
         .withDatabaseName("myfinance_test")
         .withUsername("test")
-        .withPassword("test");
+        .withPassword("test")
+        .withReuse(true);
+
+    static {
+        if (!postgres.isRunning()) {
+            postgres.start();
+        }
+    }
 
     @Test
     void shouldStartPostgresContainerWithSeedSchemaWhenInitialised() throws Exception {
@@ -48,6 +57,10 @@ class PostgresTestcontainerTest {
 
         try (Connection conn = DriverManager.getConnection(
                 postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())) {
+            // Idempotency under container reuse: drop myfinance so V001's CREATE TYPE doesn't conflict.
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("DROP SCHEMA IF EXISTS myfinance CASCADE");
+            }
             for (Path migration : migrations) {
                 assertThat(Files.exists(migration))
                     .as("migration file %s must exist", migration)

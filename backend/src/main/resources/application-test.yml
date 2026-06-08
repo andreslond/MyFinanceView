@@ -4,6 +4,10 @@
 # DataSource and jOOQ auto-configuration are excluded by default; integration tests
 # that need them must re-enable explicitly or rely on @DynamicPropertySource setting a URL.
 # See openspec/changes/backend-scaffolding/design.md D7.
+#
+# Auth-related properties (app.auth.supabase.jwks-uri, app.auth.supabase.issuer) are likewise
+# left blank — SecurityIntegrationTest injects them via @DynamicPropertySource at runtime from
+# the JwksWireMockExtension. See openspec/changes/backend-mvp-readonly/design.md D1.
 spring:
   main:
     banner-mode: "off"
@@ -11,3 +15,10 @@ spring:
     exclude:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
       - org.springframework.boot.autoconfigure.jooq.JooqAutoConfiguration
+
+app:
+  auth:
+    supabase:
+      jwks-uri:
+      issuer:
+      audience: authenticated
