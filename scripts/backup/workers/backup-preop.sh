@@ -168,7 +168,10 @@ VERIFY_FAILED=false
 
 if printf '%s' "${IDENTITY_CONTENT}" | \
    bash "${VERIFY_SCRIPT}" --target "pre-op/${ARTEFACT_NAME}" > "${VERIFY_RESULT_FILE}"; then
-  VERIFY_JSON="$(cat "${VERIFY_RESULT_FILE}")"
+  # verify-restore.sh's stdout includes the docker run container ID,
+  # psql "CREATE SCHEMA"/"INSERT 0 1" notices, and finally the verify JSON.
+  # Grab only the last non-blank line — the emit_json_result payload.
+  VERIFY_JSON="$(tail -n 1 "${VERIFY_RESULT_FILE}" | sed 's/[[:space:]]*$//')"
 else
   VERIFY_FAILED=true
 fi
