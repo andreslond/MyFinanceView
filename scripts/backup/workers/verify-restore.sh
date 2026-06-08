@@ -61,7 +61,12 @@ log_info "Verify target: ${TARGET}"
 VERIFY_CONTAINER="myfinance-verify-$(uuidgen | tr -d '-' | head -c 16)"
 VERIFY_DIR="/var/lib/myfinance-backup/verify-work/${VERIFY_CONTAINER}"
 mkdir -p "${VERIFY_DIR}"
-chmod 0700 "${VERIFY_DIR}"
+# Dir must be traversable by the postgres container (uid 999 inside
+# postgres:17). The .identity file written below has an explicit umask 0177
+# so it stays 0600 root-only regardless of the parent dir mode. The dump
+# files written by tar extract use the runner's default umask (0022 = 0644)
+# which is the level postgres uid needs to pg_restore from /backup.
+chmod 0755 "${VERIFY_DIR}"
 
 # ---------------------------------------------------------------------------
 # EXIT trap — stop ephemeral postgres + shred identity + remove work dir
