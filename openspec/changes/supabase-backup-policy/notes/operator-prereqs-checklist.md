@@ -1,5 +1,13 @@
 # §1 Operator prereqs — step-by-step checklist
 
+> **STATUS: CLOSED 2026-06-07.** Todos los 11 pasos resueltos (con P3-papel y P9-Kuma omitidos por decisión — ver tabla v1 cuts abajo). El recipient público committeado en `0ff85ca` y los 9 task boxes §1.1-§1.9 flipados a [x] en `tasks.md`. **Esta checklist se mantiene solo como referencia histórica / runbook de rotación** — si un secret se rota en el futuro, el operador re-ejecuta solo el paso correspondiente.
+>
+> **No vuelvas a correr esta checklist desde cero.** Si la próxima sesión te dice "ejecutar §1 manual", el operador ya lo hizo: verifica el banner aquí y `progress.md` → decision log "§1 operator prereqs CLOSED (2026-06-07)" antes de proponer cualquier re-trabajo.
+>
+> Próximo bloque tras §1 = §6 (VPS Docker build) + §8 (deploy + n8n credentials). Ver `tasks.md`.
+
+---
+
 > Imprime esto o ábrelo en una pestaña aparte mientras trabajas. Marca cada `[ ]` cuando termines.
 > Tiempo estimado total: 30-45 min.
 >
