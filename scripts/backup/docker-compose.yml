@@ -50,6 +50,11 @@ services:
 
 # The n8n_net network is created by the n8n compose project; declare as
 # external so Docker Compose joins it rather than creating a new one.
+# `name:` is set explicitly to the project-prefixed Docker name because the
+# operator's production n8n compose lives at /home/deploy/n8n/ → project
+# name `n8n` → real Docker network = `n8n_n8n_net`. Without the override,
+# Docker would look for a network literally named `n8n_net` and fail.
 networks:
   n8n_net:
     external: true
+    name: n8n_n8n_net
