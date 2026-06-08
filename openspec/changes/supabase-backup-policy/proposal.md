@@ -1,3 +1,7 @@
+## Status
+
+**LIVE since 2026-06-08 04:02 UTC.** Daily cron `30 2 * * *` America/Bogota active on workflow id `TCV3oLtlwx375u7W` at `https://n8n.datachefnow.com`. Bootstrap PreOp artefact: `pre-op/2026-06-08T04-01-53Z-initial-bootstrap-FINAL.tar.age` (sha256 `f17b2297…`) with 4/4 verify probes green. Deployment retrospective covering the 14 production fixes between PreOp attempt #1 and HTTP 200 is at `notes/initial-bootstrap-14-fixes.md`. `flyway-migrations` §7 is unblocked.
+
 ## Why
 
 Supabase remote currently holds three months of irreplaceable production transaction data for the single user, ingested from Gmail+n8n — there is no staging, no replica, no documented backup, and the Supabase Free tier's dashboard backups are not directly downloadable. The next `/opsx:apply` against this database is the one-time Flyway baseline (`flyway-migrations` §7), and every future schema migration after V004+ is also a write. Without a verified backup and a tested restore path, a single fat-fingered `flyway:migrate` against the wrong URL — or a Supabase incident — would erase the entire dataset with no recovery option. This change must land before §7 of `flyway-migrations` is unblocked.
