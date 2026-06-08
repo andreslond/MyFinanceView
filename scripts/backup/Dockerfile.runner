@@ -1,0 +1,58 @@
+# Dockerfile.runner — myfinance-backup-runner sidecar
+#
+# Base: node:22-alpine3.21 (pinned — Alpine 3.21 is the first release that
+# carries postgresql17-client in apk). Before activation and on each
+# key-rotation cycle, verify the pin is still current per README.md §2.5.2.
+FROM node:22-alpine3.21
+
+# Install system tools.
+# util-linux provides uuidgen (needed by verify-restore.sh for UUID-derived
+# container names — M16 fix).
+# tini is the PID 1 init wrapper that correctly handles SIGTERM forwarding.
+RUN apk add --no-cache \
+      postgresql17-client \
+      age \
+      rclone \
+      docker-cli \
+      tar \
+      gzip \
+      curl \
+      jq \
+      bash \
+      tini \
+      util-linux \
+    # Assert pg_dump is version 17 — fail the build immediately if the package
+    # name drifts or the wrong version installs (6.2 fix: build-time assertion).
+    && pg_dump --version | grep -E '^pg_dump \(PostgreSQL\) 17\.' \
+    || { echo "ERROR: pg_dump is not version 17 — update the apk package name or base image" >&2; exit 1; }
+
+WORKDIR /app
+
+# Copy Node runner source
+COPY runner/package.json runner/package-lock.json* ./
+RUN npm ci --omit=dev
+
+COPY runner/ ./
+
+# Install the rclone-config materializer entrypoint shim (B2 fix from replant
+# adversarial review). Without this the runner would have no rclone remote at
+# runtime and every R2 call would fail.
+RUN install -m 0755 /app/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+# Copy worker scripts
+COPY workers/ /opt/myfinance-backup/workers/
+RUN chmod +x /opt/myfinance-backup/workers/*.sh
+
+# Copy age recipient public keys (baked in — never the private identities).
+# chmod 0444: read-only inside the image so a compromised runner cannot
+# rewrite them to a recipient the attacker controls (B1 fix).
+COPY recipients/ /opt/myfinance-backup/recipients/
+RUN chmod -R 0444 /opt/myfinance-backup/recipients/
+
+# Expose HTTP port (not published to host — internal Docker network only)
+EXPOSE 8080
+
+# tini as PID 1 for correct SIGTERM handling; entrypoint shim materializes
+# the rclone r2 remote from BACKUP_R2_* env vars before exec'ing CMD.
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/docker-entrypoint.sh"]
+CMD ["node", "server.js"]

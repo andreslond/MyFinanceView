@@ -1,0 +1,148 @@
+{
+  "name": "MyFinanceBackup-DispatchAlert",
+  "active": false,
+  "nodes": [
+    {
+      "id": "execute-workflow-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {
+        "workflowInputsDefinition": {
+          "values": [
+            {
+              "name": "title",
+              "type": "string"
+            },
+            {
+              "name": "body",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ntfy-push",
+      "name": "ntfy.sh Push",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 220],
+      "continueOnFail": true,
+      "parameters": {
+        "method": "POST",
+        "url": "=https://ntfy.sh/{{ $env.MYFINANCE_BACKUP_NTFY_TOPIC }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Title",
+              "value": "={{ $json.title }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "text/plain",
+        "body": "={{ $json.body }}",
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "resend-email",
+      "name": "Resend Email Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 400],
+      "continueOnFail": true,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ from: $env.MYFINANCE_BACKUP_ALERT_FROM, to: $env.MYFINANCE_BACKUP_ALERT_TO, subject: $json.title, text: $json.body }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "myfinance-backup-resend-auth",
+          "name": "MyFinance Backup Resend (HTTP Header Auth)"
+        }
+      }
+    },
+    {
+      "id": "merge-results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [700, 300],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "ntfy.sh Push",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Resend Email Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ntfy.sh Push": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resend Email Alert": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": ["backup", "myfinance"]
+}

@@ -1,0 +1,128 @@
+{
+  "name": "MyFinanceBackup-PreOp",
+  "active": false,
+  "nodes": [
+    {
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {}
+    },
+    {
+      "id": "set-reason",
+      "name": "Set Reason",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "reason",
+              "name": "reason",
+              "value": "flyway-baseline",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {},
+        "notes": "Operator: edit the `reason` value above (3-60 chars, regex ^[A-Za-z0-9._+-]+$) before clicking Execute. Examples: flyway-baseline, v4.1-migration, manual-cleanup-2026-06-01"
+      }
+    },
+    {
+      "id": "validate-reason",
+      "name": "Validate Reason",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "parameters": {
+        "jsCode": "// Defense-in-depth: validate reason regex before invoking the runner.\n// The runner (backup-preop.sh) also validates, but failing fast here gives the\n// operator a clearer error in the n8n UI than a generic worker_failed.\nconst REASON_REGEX = /^[A-Za-z0-9._+-]{3,60}$/;\nconst reason = ($input.first().json.reason || '').trim();\n\nif (!REASON_REGEX.test(reason)) {\n  throw new Error(`invalid_reason: \"${reason}\" does not match ${REASON_REGEX.source}. Edit the Set Reason node and retry.`);\n}\n\nreturn [{ json: { reason } }];"
+      }
+    },
+    {
+      "id": "http-run-preop",
+      "name": "POST /run/preop",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "http://myfinance-backup-runner:8080/run/preop",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Runner-Secret",
+              "value": "={{ $credentials.runnerSecret }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "reason",
+              "value": "={{ $json.reason }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 1200000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Reason",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Reason": {
+      "main": [
+        [
+          {
+            "node": "Validate Reason",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Reason": {
+      "main": [
+        [
+          {
+            "node": "POST /run/preop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": "MyFinanceBackup-ErrorHandler"
+  },
+  "tags": ["backup", "myfinance"]
+}

@@ -195,94 +195,96 @@ The `-v` flag drops volumes; migrations in `backend/database/migrations/` re-run
 | 401 on every endpoint | JWT missing/expired | Re-login via Supabase auth |
 | Connection pool exhausted | Hikari max < concurrency | Bump max or audit for leaks |
 
-## 12. MVP Frontend Deploy (Vercel)
+## 12. Backup & Disaster Recovery
 
-The frontend MVP from `openspec/changes/mvp-frontend-readonly/` is deployed to Vercel as a static SPA. It talks to Supabase directly via `supabase-js`; the backend Java is not yet in the deploy path.
+Source of truth: [`openspec/specs/database-backups/spec.md`](../openspec/specs/database-backups/spec.md) (populated after `/opsx:archive` of the `supabase-backup-policy` change); operator runbook lives at [`scripts/backup/README.md`](../scripts/backup/README.md).
 
-### Production URL
+### 12.1 Daily cadence
 
-`https://frontend-delta-murex-29.vercel.app`
+The backup sidecar (`myfinance-backup-runner`, Node + Express on the VPS, same network as n8n) runs every day at 02:30 America/Bogota driven by the `MyFinanceBackup-Daily` n8n workflow:
 
-(There is also a canonical deployment-id URL printed by `vercel deploy --prod`; the alias above is the stable shareable one.)
+1. `pg_dump` the `myfinance` schema + the `auth.users` table from the Supabase Session Pooler (IPv4 path).
+2. Bundle the dumps into a single `.tar` and encrypt with `age` against the primary recipient (committed at `scripts/backup/recipients/primary.txt`). Single-recipient design — operator owns the matching identity on their Windows PC AND on one printed paper at physical location A.
+3. Upload `daily/YYYY-MM-DD.tar.age` to Cloudflare R2 bucket `my-finance-view-backups`.
+4. Post-upload SHA-256 re-verify (re-download from R2 + recompute) catches multipart-truncation false-positives.
+5. On Sundays, promote the daily artefact to `weekly/YYYY-Www.tar.age` via server-side `rclone copyto`. On day-of-month=1, promote to `monthly/YYYY-MM.tar.age`.
+6. Chained restore-verify (reviewer Q2 fix): download the just-uploaded artefact, decrypt, restore into an ephemeral `postgres:17` container, run the SQL probe suite. **Quarantine any artefact that fails verify** (server-side move to `quarantine/<timestamp>-<source-prefix>-<filename>`).
+7. Upsert `status/last-success.json` + `status/last-verify.json` on R2 with the SHA-256, ISO-8601 UTC timestamp, duration, and probe results.
+8. On any failure, the worker calls `dispatch_alert` which fires **ntfy.sh push** + **Resend transactional email** in parallel (v1 alerting; see §12.3 below).
 
-### Vercel project
+**Retention (v1, operator decision 2026-06-01):** R2 has ONE bucket-side lifecycle rule — `myfinance-daily-30d` deleting `daily/` objects after 30 days. The `weekly/`, `monthly/`, `pre-op/`, `quarantine/` prefixes accumulate without expiry; the operator spot-checks `pre-op/` size monthly per the §10.5 calendar reminder.
 
-- Owner: `andrestor2-gmailcoms-projects`
-- Project: `frontend` (Vite framework auto-detected; root `frontend/`)
-- Linked locally via `frontend/.vercel/project.json` (gitignored)
+### 12.2 Backup before any Supabase write
 
-### Required env vars (production)
+Any write operation against the Supabase remote `myfinance` schema or `auth.users` table **should be preceded** by either:
 
-| Variable name | Source |
-|---|---|
-| `VITE_SUPABASE_URL` | Supabase dashboard → Settings → API → Project URL, or MCP `get_project_url(akkoqdjmmozyqdfjkabg)` |
-| `VITE_SUPABASE_ANON_KEY` | Supabase dashboard → Settings → API → "anon public" (legacy JWT), or MCP `get_publishable_keys(akkoqdjmmozyqdfjkabg)` |
+- a successful **daily snapshot** within the previous 24 hours (check `status/last-success.json` on R2), or
+- a successful **pre-op snapshot** taken within the previous 60 minutes for the specific operation about to run.
 
-**Never commit the values.** The names live in `frontend/.env.example`; real values live in `frontend/.env.local` (gitignored) for local dev and in Vercel's project env config for production.
+This expectation covers:
 
-### Build command (chained CI gate)
+- Flyway `migrate`, `baseline`, `repair`, `clean` against the Supabase remote.
+- Ad-hoc DDL or DML via `psql` or the Supabase SQL editor.
+- MCP `apply_migration` and MCP `execute_sql` against the MyFinanceView project.
+- Any ad-hoc shell script that opens a connection with write privileges.
 
-Vercel runs the entire local script suite — `npm run typecheck && npm run lint && npm run test && npm run build` — as the build command. If any step fails, the deploy fails. Defined in `frontend/vercel.json`.
+**The gate is documentation-only.** There is no CI check, no runtime hook, no MCP-side enforcement — the rule is honoured by operator discipline, by the `/opsx:apply` task-0 checklist (`openspec/templates/supabase-write-checklist.md`), and by the `adversarial-review` skill flagging missing snapshot evidence on a change proposal. The earlier draft of this section labelled the rule "BREAKING — process only"; that wording overclaimed and has been removed (B6 fix in the `supabase-backup-policy` design.md).
 
-### Redeploy
+### 12.3 Pre-op procedure
 
-```bash
-cd frontend
-vercel deploy --prod          # uses the linked project + stored env vars
-```
+To trigger an on-demand snapshot before a migration:
 
-For preview deploys (PRs, branches), drop `--prod`.
+1. Open the n8n UI at `https://n8n.datachefnow.com`.
+2. Navigate to the `MyFinanceBackup-PreOp` workflow.
+3. Click **Execute Workflow**, edit the workflow inputs to set `reason` to a filename-safe slug matching `^[A-Za-z0-9._+-]{3,60}$` (examples: `flyway-baseline`, `v4.1-migration`, `manual-export-2026-06-15`).
+4. Click Execute. The execution runs synchronously (~3–5 min) and the sidecar's JSON response surfaces in the n8n execution log.
+5. **Only proceed with the irreversible operation if the response is HTTP 200 and `verifyResult.probes` are green.** An HTTP 500 with a `verify_failed` or `upload_corrupted` body means the snapshot is in `quarantine/` and provides no protection.
 
-### Adding or rotating env vars
+**v1 (operator decision 2026-06-01):** there is no public webhook — the n8n UI is the only entry point. Automation that needs to drive a pre-op from outside the n8n UI is a bounded follow-up.
 
-```bash
-echo -n "value" | vercel env add VITE_NAME production
-# or interactively (CLI prompts and asks for environments):
-vercel env add VITE_NAME
-```
+### 12.4 Alerting (v1)
 
-After changing an env var, redeploy is required to bake the new value into the bundle (Vite inlines `import.meta.env.VITE_*` at build time).
+Two parallel channels (ntfy.sh push + Resend transactional email) reach the operator through TWO independent code paths that share the same destinations:
 
-### Smoke test
+1. **`workers/alert.sh`** (inside the runner container) fires on worker-side failures. Inline `dispatch_alert` calls cover the SHA-mismatch quarantine path and the verify-failed quarantine path; the script-level `ERR` trap (round-4 review M2 fix) catches every other non-zero exit (pg_isready / pg_dump / tar / age / rclone / status upsert) and dispatches with the line number + the last 20 log lines. The function fires `curl` against ntfy and Resend in parallel using PID-tracked `wait` (round-4 review B1 fix) so the at-least-one-succeeds contract is honoured.
+2. **`scripts/backup/n8n/MyFinanceBackup-DispatchAlert.json`** (an n8n sub-workflow) fires on n8n-side failures via the `MyFinanceBackup-ErrorHandler` workflow's Error Trigger. This catches workflow-engine errors that never reach the worker — e.g. the runner returning a 5xx the bash script could not catch, or the n8n Schedule Trigger failing to fire. The workflow fans out to the same two HTTP nodes: an n8n HTTP Request to `https://ntfy.sh/<topic>` and an n8n HTTP Request to `https://api.resend.com/emails` authenticated with an `HTTP Header Auth` credential (`Authorization: Bearer <API_KEY>` — n8n auto-injects).
 
-```bash
-curl -I https://frontend-delta-murex-29.vercel.app/                # expect HTTP/2 200
-curl -sS https://frontend-delta-murex-29.vercel.app/transactions   # SPA rewrite serves index.html, HTTP 200
-```
+Configuration storage (see `tasks.md` §8.4 for the operator setup steps):
 
-### Renaming the project
+- **n8n credentials:** `MYFINANCE_BACKUP_RESEND_API_KEY` (HTTP Header Auth credential named `MyFinance Backup Resend (HTTP Header Auth)`), `MYFINANCE_BACKUP_AGE_IDENTITY` (Generic credential), `MYFINANCE_BACKUP_RUNNER_SECRET` (Generic credential).
+- **n8n container environment variables:** `MYFINANCE_BACKUP_NTFY_TOPIC`, `MYFINANCE_BACKUP_ALERT_FROM` (= `alerts@datachefnow.com`), `MYFINANCE_BACKUP_ALERT_TO` (= operator inbox). Exposed via the n8n compose `environment:` block / `env_file`. The DispatchAlert workflow reads them as `$env.X`. These three values are non-secret config (topic is unguessable but stable; from/to do not rotate) — storing them in `$env.*` keeps the DispatchAlert workflow JSON portable.
+- **Runner container environment variables (sidecar `.env.local`):** `MYFINANCE_BACKUP_NTFY_TOPIC`, `MYFINANCE_BACKUP_RESEND_API_KEY`, `MYFINANCE_BACKUP_ALERT_FROM`, `MYFINANCE_BACKUP_ALERT_TO`. Read by `alert.sh` via plain `$VAR` bash interpolation.
 
-The auto-generated project name `frontend` is generic. To rename to `myfinance-view`, do it in the Vercel dashboard (Project Settings → General → Project Name) or by running `vercel project rm frontend && vercel link --yes --project myfinance-view` from `frontend/`.
+**Failure modes uncovered in v1 (accepted by the operator):**
 
-### Local dev against production Supabase
+- Silent Schedule-Trigger non-fire of `MyFinanceBackup-Daily` while the VPS is up (no in-cluster Watchdog in v1).
+- Whole-VPS outage (silences both alert channels). Mitigated by the operator's external uptime monitor on `n8n.datachefnow.com`.
 
-```bash
-cd frontend
-npm install                  # once
-npm run dev                  # http://localhost:5173
-```
+Both Uptime Kuma (in-cluster dead-man-switch) and healthchecks.io (off-VPS) were considered and deferred; reinstating either is a bounded follow-up if a silent non-fire is observed.
 
-`.env.local` must exist with the same two `VITE_*` vars. The dev server proxies nothing — Supabase is reached directly from the browser.
+### 12.5 Recovery procedure (paper identity drill)
 
----
+If the Windows PC identity file is lost or destroyed:
 
-## Running the backend MVP locally (post backend-mvp-readonly)
+1. Retrieve the paper from the sealed envelope at physical location A.
+2. On a clean machine (NOT the primary PC if you suspect it is compromised), type the identity into a local file: `identity.txt`.
+3. Download one snapshot from R2: `rclone copy r2:my-finance-view-backups/daily/<latest>.tar.age .`
+4. Decrypt: `age -d -i identity.txt < <snapshot>.tar.age > snapshot.tar`
+5. Extract: `tar -xf snapshot.tar` → produces `auth-users.dump`, `myfinance.dump`, `README.txt`.
+6. Restore into a fresh Postgres: see `scripts/backup/README.md §2.5.4 Operator runbook` for the full restore script (pre-creates `auth.users(id uuid PRIMARY KEY)` stub before restoring; `pg_restore --data-only` on the auth dump; full `pg_restore` on the myfinance dump).
+7. Wipe the typed identity file and the decrypted plaintext: `shred -u identity.txt snapshot.tar`.
+8. If the paper is degraded (smudged, water-damaged), re-print from the still-valid PC identity and re-file at location A. Do an annual recurrence drill (§2.5.7 of the backup runbook); the cadence cue in v1 is a calendar reminder on January 15th (Watchdog OVERDUE alert was dropped together with Uptime Kuma).
 
-1. Copy `.env.example` → `.env.local` and fill the five MVP backend vars:
-   - `SUPABASE_JWT_JWKS_URI` (default points at the project's public JWKS endpoint — no secret).
-   - `SUPABASE_JWT_ISSUER` (canonical issuer URL).
-   - `SUPABASE_SERVICE_ROLE_KEY` (from Supabase dashboard → API → service_role).
-   - `SUPABASE_DB_URL` (session-pooler JDBC URL — already populated as default).
-   - `APP_CORS_ALLOWED_ORIGINS` (CSV; leave blank for local — `localhost:5173` is auto-allowed in `local` profile, `https://*.vercel.app` always).
-2. Start Docker Desktop (Testcontainers + local docker-compose Postgres both need it).
-3. Run the backend with the `local` profile:
-   ```bash
-   cd backend
-   SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
-   # Or: mvnd spring-boot:run  (much faster; see CLAUDE.md)
-   ```
-   The app listens on `:8080`. Hit `http://localhost:8080/actuator/health` to confirm `{"status":"UP"}`.
-4. To call protected endpoints, mint a JWT via Supabase Auth (e.g. sign in from the frontend) and pass it as `Authorization: Bearer <jwt>`. The backend validates ES256 signatures against the public JWKS — no shared secret needed.
-5. For tests: `mvnd test` (uses Testcontainers — no manual DB setup). `~/.testcontainers.properties` has `testcontainers.reuse.enable=true` so the Postgres container persists across runs.
+**Catastrophic key-loss path:** if BOTH the PC identity AND the paper are simultaneously lost, every existing encrypted snapshot is permanently unreadable. Documented and accepted under the single-recipient design (`supabase-backup-policy/proposal.md ## Threat model`).
 
-**What's exposed in MVP:** 4 endpoints — `GET /api/v1/{transactions,accounts,categories}` and `PATCH /api/v1/transactions/{id}/category`. Only `/actuator/health` is unauthenticated; every other path under `/actuator/**` returns 404 by design (D11).
+### 12.6 Key rotation
+
+Annual cadence (or immediately after suspected compromise). See `scripts/backup/README.md §2.5.5` for the full table. Secrets to rotate:
+
+- **age primary identity** — rebuild + redeploy runner image with new `recipients/primary.txt`.
+- **R2 token** — generate new token in Cloudflare, update `.env.local` + rclone config.
+- **Resend API key** — revoke + regenerate on the verified `datachefnow.com` domain.
+- **ntfy topic** — generate new slug + re-subscribe phone.
+- **Runner shared secret** — update env var + n8n credential.
+
+**v1 cuts (no longer rotated):** Gmail App Password (replaced by Resend), Uptime Kuma push URL (Kuma deferred), healthchecks.io URL (off-VPS dead-man-switch deferred).
