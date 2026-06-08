@@ -45,7 +45,7 @@ icon, color text
 is_active   boolean DEFAULT true
 created_at, updated_at
 ```
-19 system defaults at present. Pending TASK-DB-01: `display_name` column in Spanish (NOT NULL post-backfill).
+19 system defaults at present. Pending TASK-DB-01 (V004 — `display_name` column in Spanish, NOT NULL post-backfill) — implementación cubierta por el change `backend-mvp-readonly`.
 
 ### `accounts`
 ```sql
@@ -59,7 +59,7 @@ nickname    text
 active      boolean DEFAULT true
 created_at, updated_at
 ```
-3 active accounts. Pending TASK-DB-03: `cut_day int CHECK (1–28)`, `payment_day int CHECK (1–28)`.
+3 active accounts. Pending TASK-DB-03 (V006 post-`backend-mvp-readonly`): `cut_day int CHECK (1–28)`, `payment_day int CHECK (1–28)`.
 
 ### `transactions`
 ```sql
@@ -79,7 +79,7 @@ external_id           text                   -- UNIQUE WHERE NOT NULL (idempoten
 raw_payload           jsonb                  -- original email for audit
 created_at, updated_at
 ```
-362 rows at 2026-05-11. Pending TASK-DB-02 (installments) and TASK-DB-05 (categorization fields) — see §3.
+362 rows at 2026-05-11. Pending TASK-DB-02 (V007 — installments) y TASK-DB-05 (V008 — categorization fields) — see §3. El change `backend-mvp-readonly` agrega `merchant_id UUID` (nullable, FK a `myfinance.merchants` via V005); las 362 filas históricas quedan con `merchant_id = NULL` hasta que el usuario re-categorize via PATCH.
 
 ### `budgets`
 ```sql
@@ -119,18 +119,45 @@ Empty. RLS: read = all authenticated; write = service role.
 
 ## 3. Pending Migrations (TASK-DB-01..05)
 
+> Order matters. FK dependencies force this sequence. **Cola revisada 2026-06-02** — el change `backend-mvp-readonly` consume V004 y V005 (split por operator decision sobre el adv-review B1+B2); el resto de la cola corre +1 vs el plan original.
+>
 > Order matters. FK dependencies force this sequence.
 >
 > **Pre-flight expectation (operator discipline, documentation-only gate):** before applying any migration in this section to the Supabase remote, the operator **should** verify either a daily snapshot < 24 h old or run `MyFinanceBackup-PreOp` from the n8n UI within the last 60 minutes. Full procedure and rationale at [`docs/development-guide.md §12 Backup & Disaster Recovery`](development-guide.md#12-backup--disaster-recovery); spec source at `openspec/changes/supabase-backup-policy/` (migrates to `openspec/specs/database-backups/` after archive). No CI / runtime enforcement — relies on operator + the `adversarial-review` skill flagging missing snapshot evidence on change proposals.
 
-### V004 — TASK-DB-01: categories.display_name (ES)
+### V004 — TASK-DB-01: categories.display_name (ES) — owned by `backend-mvp-readonly`
 ```sql
 ALTER TABLE myfinance.categories ADD COLUMN display_name text;
 -- backfill the 19 system categories (Restaurantes y Cafés, Mercado y Supermercado, …)
+UPDATE myfinance.categories SET display_name = name WHERE display_name IS NULL; -- fallback defensivo
 ALTER TABLE myfinance.categories ALTER COLUMN display_name SET NOT NULL;
 ```
 
-### V005 — TASK-DB-03: accounts cut/payment day
+### V005 — TASK-DB-04: merchants table + transactions.merchant_id FK — owned by `backend-mvp-readonly`
+```sql
+CREATE TABLE myfinance.merchants (
+  id                 uuid PK DEFAULT extensions.uuid_generate_v4(),
+  user_id            uuid → auth.users,
+  display_name       text NOT NULL,
+  raw_pattern        text NOT NULL,
+  category_id        uuid NOT NULL → categories,
+  confidence         numeric(3,2) NOT NULL DEFAULT 0.50 CHECK (BETWEEN 0.00 AND 1.00),
+  match_count        int NOT NULL DEFAULT 0 CHECK (>= 0),
+  last_confirmed_at  timestamptz,
+  created_at, updated_at,
+  UNIQUE (user_id, raw_pattern)
+);
+-- RLS enabled, owner-only policies análogas a accounts_* de V002.
+-- Sin seed: el feedback loop del backend siembra merchants on-demand.
+
+ALTER TABLE myfinance.transactions
+  ADD COLUMN merchant_id uuid REFERENCES myfinance.merchants(id) ON DELETE SET NULL;
+CREATE INDEX idx_transactions_merchant_id
+  ON myfinance.transactions(merchant_id)
+  WHERE merchant_id IS NOT NULL;
+```
+
+### V006 — TASK-DB-03: accounts cut/payment day
 ```sql
 ALTER TABLE myfinance.accounts
   ADD COLUMN cut_day      int CHECK (cut_day BETWEEN 1 AND 28),
@@ -140,7 +167,7 @@ ALTER TABLE myfinance.accounts
 ```
 Plus function `myfinance.get_billing_period(p_account_id uuid, p_reference_date date) RETURNS (start date, end date)`.
 
-### V006 — TASK-DB-02: installments
+### V007 — TASK-DB-02: installments
 ```sql
 ALTER TABLE myfinance.transactions
   ADD COLUMN installments_total     int NOT NULL DEFAULT 1,
@@ -151,29 +178,9 @@ ALTER TABLE myfinance.transactions
   ADD CONSTRAINT chk_installments_positive CHECK (installments_total >= 1);
 ```
 
-### V007 — TASK-DB-04: merchants table
-```sql
-CREATE TABLE myfinance.merchants (
-  id                 uuid PK DEFAULT extensions.uuid_generate_v4(),
-  user_id            uuid → auth.users,
-  raw_pattern        text NOT NULL,
-  normalized_name    text NOT NULL,
-  category_id        uuid → categories,
-  confidence         numeric DEFAULT 0.5 CHECK (BETWEEN 0 AND 1),
-  match_count        int DEFAULT 0,
-  last_confirmed_at  timestamptz,
-  created_at, updated_at,
-  UNIQUE (user_id, raw_pattern)
-);
-CREATE INDEX ON myfinance.merchants USING gin(to_tsvector('simple', raw_pattern));
--- RLS enabled, owner-only.
--- Seed 15+ known merchants (DIDI, RAPPI, APPLE.COM, JUAN VALDEZ, …)
-```
-
-### V008 — TASK-DB-05: transactions categorization fields
+### V008 — TASK-DB-05: transactions categorization fields (sin `merchant_id`, ya en V005)
 ```sql
 ALTER TABLE myfinance.transactions
-  ADD COLUMN merchant_id                uuid REFERENCES myfinance.merchants(id),
   ADD COLUMN ai_suggested_category_id   uuid REFERENCES myfinance.categories(id),
   ADD COLUMN categorization_confidence  numeric CHECK (BETWEEN 0 AND 1),
   ADD COLUMN category_confirmed         boolean NOT NULL DEFAULT false;
@@ -205,11 +212,12 @@ category_type       : 'expense' | 'income'
 | `transactions` | `user_id, type` | BTREE | Type-filtered aggregation |
 | `transactions` | `account_id` | BTREE | Account-scoped queries |
 | `transactions` | `category_id` | BTREE PARTIAL | Category reports |
+| `transactions` | `merchant_id WHERE merchant_id IS NOT NULL` | BTREE PARTIAL | Merchant-scoped queries (V005) |
 | `transactions` | `(account_id, occurred_at DESC) WHERE category_confirmed = false` | BTREE PARTIAL | Pending-review queue (V008) |
 | `accounts` | `user_id` | BTREE | User listing |
 | `categories` | `user_id WHERE user_id IS NOT NULL` | BTREE PARTIAL | User categories |
 | `budgets` | `user_id, year, month` | UNIQUE | One budget per month |
-| `merchants` | `raw_pattern` (gin tsvector) | GIN | Fuzzy lookup (V007) |
+| `merchants` | `(user_id, raw_pattern)` | UNIQUE | Anti-duplicate por usuario (V005) |
 | `savings_goals` | `user_id, status, priority` | BTREE | Goal listing (V009) |
 | `savings_goal_contributions` | `goal_id, occurred_at DESC` | BTREE | History (V009) |
 

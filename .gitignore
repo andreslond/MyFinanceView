@@ -6,6 +6,8 @@ target/generated-sources/jooq/
 # Node dependencies (runner sidecar — package-lock.json IS committed, node_modules is NOT)
 node_modules/
 
+# Local backups (operator pre-V00x snapshots)
+backups/
 # Maven
 !.mvn/wrapper/maven-wrapper.jar
 !.mvn/wrapper/maven-wrapper.properties
