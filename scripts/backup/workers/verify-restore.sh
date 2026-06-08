@@ -158,6 +158,13 @@ until pg_isready -h "${VERIFY_CONTAINER}" -p 5432 -U postgres -t 5 >/dev/null 2>
 done
 log_info "Postgres ready in ${VERIFY_CONTAINER}"
 
+# Diagnostic — confirm files are actually visible inside the postgres container.
+# Logs both the runner-side view and the postgres-side view of /backup.
+log_info "Runner sees VERIFY_DIR contents:"
+ls -la "${VERIFY_DIR}/" 2>&1 | while IFS= read -r line; do log_info "  $line"; done
+log_info "Postgres container sees /backup contents:"
+docker exec "${VERIFY_CONTAINER}" ls -la /backup/ 2>&1 | while IFS= read -r line; do log_info "  $line"; done
+
 # ---------------------------------------------------------------------------
 # 4.5.7 Pre-create auth schema stub (B2 fix); restore dumps in order
 # ---------------------------------------------------------------------------
