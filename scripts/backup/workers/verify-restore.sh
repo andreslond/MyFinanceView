@@ -158,15 +158,13 @@ until pg_isready -h "${VERIFY_CONTAINER}" -p 5432 -U postgres -t 5 >/dev/null 2>
 done
 log_info "Postgres ready in ${VERIFY_CONTAINER}"
 
-# Diagnostic — confirm files are actually visible inside the postgres container.
-# Logs both the runner-side view and the postgres-side view of /backup.
-log_info "Runner sees VERIFY_DIR contents:"
-ls -la "${VERIFY_DIR}/" 2>&1 | while IFS= read -r line; do log_info "  $line"; done
-log_info "Postgres container sees /backup contents:"
-docker exec "${VERIFY_CONTAINER}" ls -la /backup/ 2>&1 | while IFS= read -r line; do log_info "  $line"; done
-
 # ---------------------------------------------------------------------------
-# 4.5.7 Pre-create auth schema stub (B2 fix); restore dumps in order
+# 4.5.7 Pre-create auth schema stub (B2 fix); restore dumps in order.
+# pg_restore runs as a client INSIDE THIS RUNNER (not inside the postgres
+# container) and streams the dump bytes to the postgres server over TCP.
+# The dump file path is therefore a runner-local path, NOT the /backup
+# container-side path. The -v /backup mount is harmless and kept in case
+# a future server-side COPY ever needs it.
 # ---------------------------------------------------------------------------
 log_info "Creating auth schema stub"
 PGPASSWORD=verify psql -h "${VERIFY_CONTAINER}" -U postgres -d postgres \
@@ -177,12 +175,12 @@ log_info "Restoring auth-users.dump (data only)"
 PGPASSWORD=verify pg_restore \
   -h "${VERIFY_CONTAINER}" -p 5432 -U postgres -d postgres \
   --data-only --table=users -Fc \
-  "/backup/auth-users.dump"
+  "${VERIFY_DIR}/auth-users.dump"
 
 log_info "Restoring myfinance.dump"
 PGPASSWORD=verify pg_restore \
   -h "${VERIFY_CONTAINER}" -p 5432 -U postgres -d postgres \
-  -Fc "/backup/myfinance.dump"
+  -Fc "${VERIFY_DIR}/myfinance.dump"
 
 # ---------------------------------------------------------------------------
 # 4.5.8 Run verify probes (NO latest_transaction_age_days — B3 fix)
