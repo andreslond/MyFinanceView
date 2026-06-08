@@ -63,7 +63,7 @@ echo "[smoke] Working dir: ${SMOKE_WORK_DIR}"
 echo "[smoke] Starting Postgres 17 container: ${PG_CONTAINER}"
 docker run -d \
   --name "${PG_CONTAINER}" \
-  --network n8n_net \
+  --network "${BACKUP_VERIFY_NETWORK:-n8n_n8n_net}" \
   -e POSTGRES_PASSWORD="${PG_PASSWORD}" \
   -e POSTGRES_DB="${PG_DB}" \
   -p "${PG_PORT}:5432" \

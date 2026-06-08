@@ -109,7 +109,7 @@ tar -xf "${VERIFY_DIR}/snapshot.tar" -C "${VERIFY_DIR}/"
 log_info "Starting ephemeral container: ${VERIFY_CONTAINER}"
 docker run -d --rm \
   --name "${VERIFY_CONTAINER}" \
-  --network n8n_net \
+  --network "${BACKUP_VERIFY_NETWORK:-n8n_n8n_net}" \
   -v "${VERIFY_DIR}:/backup:ro" \
   -e POSTGRES_PASSWORD=verify \
   -e POSTGRES_DB=postgres \
