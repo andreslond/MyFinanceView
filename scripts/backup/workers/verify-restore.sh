@@ -224,15 +224,18 @@ PGPASSWORD=verify psql -h "${VERIFY_CONTAINER}" -U postgres -d postgres \
   -v ON_ERROR_STOP=1 \
   -c "INSERT INTO auth.users (id) VALUES (gen_random_uuid())"
 
-log_info "Restoring myfinance.dump (--no-owner --no-acl)"
-# The supabase production schema GRANTs to roles (service_role, anon,
-# authenticated, supabase_auth_admin, etc.) that exist only in the live
-# supabase project and not in a vanilla postgres:17 image. --no-acl
-# skips every GRANT/REVOKE; --no-owner skips ALTER OWNER. Schema and data
-# still restore in full, which is what the verify probes need to count.
+log_info "Restoring myfinance.dump (--no-owner --no-acl --disable-triggers)"
+# --no-acl     : skip GRANT/REVOKE (supabase-only roles)
+# --no-owner   : skip ALTER OWNER
+# --disable-triggers: temporarily set session_replication_role = replica
+#                so FK constraints to auth.users (which the stub doesn't
+#                pre-populate with the production user_id) don't reject
+#                the COPY data. The FKs are still installed on the
+#                tables — they just are not enforced during the load.
+#                Acceptable for verify because the probes only count rows.
 PGPASSWORD=verify pg_restore \
   -h "${VERIFY_CONTAINER}" -p 5432 -U postgres -d postgres \
-  --no-owner --no-acl \
+  --no-owner --no-acl --disable-triggers \
   -Fc "${VERIFY_DIR}/myfinance.dump"
 
 # ---------------------------------------------------------------------------
