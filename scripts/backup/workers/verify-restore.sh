@@ -166,10 +166,31 @@ log_info "Postgres ready in ${VERIFY_CONTAINER}"
 # container-side path. The -v /backup mount is harmless and kept in case
 # a future server-side COPY ever needs it.
 # ---------------------------------------------------------------------------
-log_info "Creating auth schema stub"
+log_info "Creating supabase-compatible stubs (auth schema + roles + auth.* functions)"
+# pg_restore of the myfinance dump references supabase-managed objects that
+# don't exist in a vanilla postgres:17 image:
+#   - Roles: anon, authenticated, service_role (RLS policies TO <role>)
+#   - Function: auth.uid() / auth.email() / auth.role() / auth.jwt() (RLS USING expressions)
+#   - Schema: auth + auth.users (FK targets)
+# Without these, pg_restore aborts on POLICY statements even with --no-acl.
+# Each stub is the minimum that lets pg_restore CREATE POLICY succeed
+# (policies do not need to evaluate true; they need their referenced objects
+# to exist at CREATE time).
 PGPASSWORD=verify psql -h "${VERIFY_CONTAINER}" -U postgres -d postgres \
-  -v ON_ERROR_STOP=1 \
-  -c "CREATE SCHEMA IF NOT EXISTS auth; CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY);"
+  -v ON_ERROR_STOP=1 <<'SQL'
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN CREATE ROLE service_role; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_auth_admin') THEN CREATE ROLE supabase_auth_admin; END IF;
+END $$;
+CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid AS $$ SELECT NULL::uuid $$ LANGUAGE sql STABLE;
+CREATE OR REPLACE FUNCTION auth.email() RETURNS text AS $$ SELECT ''::text $$ LANGUAGE sql STABLE;
+CREATE OR REPLACE FUNCTION auth.role() RETURNS text AS $$ SELECT ''::text $$ LANGUAGE sql STABLE;
+CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb AS $$ SELECT '{}'::jsonb $$ LANGUAGE sql STABLE;
+SQL
 
 # Validate the auth-users dump is structurally parseable (catches truncation
 # and decrypt-then-corrupt scenarios) without trying to restore data — the
