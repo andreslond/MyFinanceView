@@ -263,3 +263,26 @@ npm run dev                  # http://localhost:5173
 ```
 
 `.env.local` must exist with the same two `VITE_*` vars. The dev server proxies nothing — Supabase is reached directly from the browser.
+
+---
+
+## Running the backend MVP locally (post backend-mvp-readonly)
+
+1. Copy `.env.example` → `.env.local` and fill the five MVP backend vars:
+   - `SUPABASE_JWT_JWKS_URI` (default points at the project's public JWKS endpoint — no secret).
+   - `SUPABASE_JWT_ISSUER` (canonical issuer URL).
+   - `SUPABASE_SERVICE_ROLE_KEY` (from Supabase dashboard → API → service_role).
+   - `SUPABASE_DB_URL` (session-pooler JDBC URL — already populated as default).
+   - `APP_CORS_ALLOWED_ORIGINS` (CSV; leave blank for local — `localhost:5173` is auto-allowed in `local` profile, `https://*.vercel.app` always).
+2. Start Docker Desktop (Testcontainers + local docker-compose Postgres both need it).
+3. Run the backend with the `local` profile:
+   ```bash
+   cd backend
+   SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
+   # Or: mvnd spring-boot:run  (much faster; see CLAUDE.md)
+   ```
+   The app listens on `:8080`. Hit `http://localhost:8080/actuator/health` to confirm `{"status":"UP"}`.
+4. To call protected endpoints, mint a JWT via Supabase Auth (e.g. sign in from the frontend) and pass it as `Authorization: Bearer <jwt>`. The backend validates ES256 signatures against the public JWKS — no shared secret needed.
+5. For tests: `mvnd test` (uses Testcontainers — no manual DB setup). `~/.testcontainers.properties` has `testcontainers.reuse.enable=true` so the Postgres container persists across runs.
+
+**What's exposed in MVP:** 4 endpoints — `GET /api/v1/{transactions,accounts,categories}` and `PATCH /api/v1/transactions/{id}/category`. Only `/actuator/health` is unauthenticated; every other path under `/actuator/**` returns 404 by design (D11).
