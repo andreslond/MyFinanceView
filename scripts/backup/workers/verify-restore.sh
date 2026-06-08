@@ -178,18 +178,33 @@ log_info "Creating supabase-compatible stubs (auth schema + roles + auth.* funct
 # to exist at CREATE time).
 PGPASSWORD=verify psql -h "${VERIFY_CONTAINER}" -U postgres -d postgres \
   -v ON_ERROR_STOP=1 <<'SQL'
+-- Schemas supabase puts custom objects under
 CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS extensions;
+
+-- Stubbed auth.users target for FK references in the production schema
 CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY);
+
+-- Supabase-only roles referenced by RLS policies
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN CREATE ROLE service_role; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_auth_admin') THEN CREATE ROLE supabase_auth_admin; END IF;
 END $$;
+
+-- Stubs for auth.* JWT-derived helpers referenced by RLS USING clauses
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid AS $$ SELECT NULL::uuid $$ LANGUAGE sql STABLE;
 CREATE OR REPLACE FUNCTION auth.email() RETURNS text AS $$ SELECT ''::text $$ LANGUAGE sql STABLE;
 CREATE OR REPLACE FUNCTION auth.role() RETURNS text AS $$ SELECT ''::text $$ LANGUAGE sql STABLE;
 CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb AS $$ SELECT '{}'::jsonb $$ LANGUAGE sql STABLE;
+
+-- Supabase routes uuid-ossp helpers through the `extensions` schema. The
+-- production CREATE TABLE statements use `extensions.uuid_generate_v4()`
+-- as a column default. postgres 17 has built-in gen_random_uuid() so we
+-- can wrap it under that name and signature.
+CREATE OR REPLACE FUNCTION extensions.uuid_generate_v4() RETURNS uuid AS $$ SELECT gen_random_uuid() $$ LANGUAGE sql VOLATILE;
+CREATE OR REPLACE FUNCTION extensions.uuid_generate_v1() RETURNS uuid AS $$ SELECT gen_random_uuid() $$ LANGUAGE sql VOLATILE;
 SQL
 
 # Validate the auth-users dump is structurally parseable (catches truncation
