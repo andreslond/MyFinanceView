@@ -170,20 +170,20 @@
 
 ## 11. Aplicar V004 + V005 a Supabase remoto (agente autorizado, condicional)
 
-- [ ] 11.1 Agente ejecuta `mcp__claude_ai_Supabase__apply_migration` con `name="v004_categories_display_name"`, `query=<contenido literal de V004__categories_display_name.sql>`
-- [ ] 11.2 Agente verifica post-V004 vía `execute_sql`:
+- [x] 11.1 Agente ejecuta `mcp__claude_ai_Supabase__apply_migration` con `name="v004_categories_display_name"`, `query=<contenido literal de V004__categories_display_name.sql>`
+- [x] 11.2 Agente verifica post-V004 vía `execute_sql`:
   - `SELECT COUNT(*) FROM myfinance.categories WHERE display_name IS NULL` → debe ser 0
   - `SELECT COUNT(*) FROM myfinance.categories` → mismo valor que pre-V004 (no se borra ni inserta)
   - `SELECT display_name FROM myfinance.categories WHERE name = 'Dining Out' AND user_id IS NULL` → "Restaurantes y Cafés"
   - Si cualquiera falla → STOP, alertar operator, considerar restore
-- [ ] 11.3 Agente ejecuta `mcp__claude_ai_Supabase__apply_migration` con `name="v005_merchants"`, `query=<contenido literal de V005__merchants.sql>`
-- [ ] 11.4 Agente verifica post-V005 vía `execute_sql`:
+- [x] 11.3 Agente ejecuta `mcp__claude_ai_Supabase__apply_migration` con `name="v005_merchants"`, `query=<contenido literal de V005__merchants.sql>`
+- [x] 11.4 Agente verifica post-V005 vía `execute_sql`:
   - `SELECT COUNT(*) FROM myfinance.merchants` → 0
   - `SELECT COUNT(*) FROM myfinance.transactions WHERE merchant_id IS NOT NULL` → 0
   - Tabla `merchants` con RLS enabled vía `list_tables`
   - Si falla → STOP
-- [ ] 11.5 Agente ejecuta `mcp__claude_ai_Supabase__get_advisors type="security"` y verifica que no aparezcan nuevos issues atribuibles a V004/V005 (RLS missing, etc.)
-- [ ] 11.6 Agente actualiza `progress.md` con el state snapshot post-op + timestamps
+- [x] 11.5 Agente ejecuta `mcp__claude_ai_Supabase__get_advisors type="security"` y verifica que no aparezcan nuevos issues atribuibles a V004/V005 (RLS missing, etc.)
+- [x] 11.6 Agente actualiza `progress.md` con el state snapshot post-op + timestamps
 
 ## 12. Cierre
 
