@@ -36,6 +36,13 @@ export RCLONE_CONFIG_R2_ACCESS_KEY_ID="${BACKUP_R2_ACCESS_KEY_ID}"
 export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="${BACKUP_R2_SECRET_ACCESS_KEY}"
 export RCLONE_CONFIG_R2_ENDPOINT="https://${BACKUP_R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 export RCLONE_CONFIG_R2_ACL=private
+# R2 tokens scoped to a single bucket (recommended, see spec §1.4) cannot perform
+# HeadBucket or CreateBucket. rclone's default behavior is to verify the bucket
+# exists before each upload (HeadBucket → CreateBucket on 404), which returns
+# 403 AccessDenied with a bucket-scoped token and fails the worker. Setting
+# no_check_bucket=true tells rclone to trust the operator that the bucket
+# exists and skip the bucket-level probe. See https://rclone.org/s3/#s3-no-check-bucket
+export RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
 
 # Smoke-check: confirm rclone now resolves the r2 remote. This is a local
 # config check (no network call); catches misspelled env vars at container
