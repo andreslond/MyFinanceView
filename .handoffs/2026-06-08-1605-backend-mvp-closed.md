@@ -19,10 +19,10 @@ Close the OpenSpec change `backend-mvp-readonly`: archive the change directory +
 - Active changes after archive: only `supabase-backup-policy` remains.
 
 ## Working tree state
-- **Committed (this session):** `fa5ed4e spec(backend-mvp): archive change + sync canonical backend-rest-api spec`.
+- **Committed (this session):** `fa5ed4e spec(backend-mvp): archive change + sync canonical backend-rest-api spec`, `5b1219c chore(handoff): close-out note for backend-mvp-readonly archive`, `cddf624 spec(backend-mvp): flip 8 close-out checkboxes in archived tasks.md`.
 - **Staged:** none.
 - **Unstaged:** none.
-- **Untracked:** `.handoffs/2026-06-08-1605-backend-mvp-closed.md` (this file — commit it before push).
+- **Untracked:** none.
 - **Red tests:** none. Did not re-run suite; no code touched, only spec/docs moves.
 
 ## Pending
@@ -37,6 +37,7 @@ Close the OpenSpec change `backend-mvp-readonly`: archive the change directory +
 ## Non-obvious context
 - **Canonical spec count discrepancy was a subagent reporting miscount, not a sync defect.** Always cross-check req/scn counts via `grep -cE '^### Requirement: '` and `grep -cE '^#### Scenario: '` against both delta and canonical files before trusting a sync subagent's summary.
 - **`git mv` produces `R`-status entries** that `git diff --stat` collapses cleanly — preserves rename detection across `openspec/changes/<id>/` → `openspec/changes/archive/YYYY-MM-DD-<id>/`. Do not use `rm` + `cp`; you lose history.
+- **`git mv` after an unstaged Edit yields `RM` status** — the rename gets staged automatically, but the modification on top does NOT. `git commit -m` will silently commit only the rename, leaving the edit unstaged. Before archive-commit, always run `git status --short` and explicitly `git add` any `RM` entries at their NEW path. This bit this session — required addendum commit `cddf624`.
 - **`tasks.md` for archived changes still carries open `[ ]` checkboxes** for items that genuinely deferred (e.g. operator-gated PR/merge, follow-up changes in §13). This is the convention — the archived tasks.md is a frozen snapshot, not a TODO list. The 12 remaining unchecked items are intentional.
 - **`openspec status --change <id> --json` only validates artifact presence** (proposal/design/specs/tasks files exist), not task-checkbox completion. A change can report `isComplete: true` while still having `[ ]` tasks. Check both before archive.
 - **First sync of a brand-new capability** creates `openspec/specs/<capability>/spec.md` with an H1 + Purpose block. Convention (per `backend-runtime/spec.md`): Purpose may be auto-generated "TBD — created by archiving change X" placeholder, or real content if the implementer writes it. This spec got real content because the capability is fully implemented.
