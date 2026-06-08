@@ -31,8 +31,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-VERIFY_DIR="/var/lib/myfinance-verify"
 BUCKET="${BACKUP_R2_BUCKET:-my-finance-view-backups}"
+# VERIFY_DIR must live under the host bind-mount (/var/lib/myfinance-backup)
+# because the ephemeral postgres:17 container we spawn via docker-from-docker
+# mounts paths from the HOST namespace, not the runner container's namespace.
+# The previous tmpfs path /var/lib/myfinance-verify was visible inside the
+# runner but not to other containers — the docker run -v failed with
+# "No such file or directory" when pg_restore tried /backup/auth-users.dump.
+# Trade-off accepted: plaintext dumps live briefly on disk during verify
+# (vs never with the original tmpfs design) and are shredded by the EXIT
+# trap below. The encrypted long-term storage on R2 is unaffected.
 
 # ---------------------------------------------------------------------------
 # Determine target
@@ -51,18 +59,25 @@ log_info "Verify target: ${TARGET}"
 # UUID-derived container name (M16 fix) — no collisions across parallel runs
 # ---------------------------------------------------------------------------
 VERIFY_CONTAINER="myfinance-verify-$(uuidgen | tr -d '-' | head -c 16)"
+VERIFY_DIR="/var/lib/myfinance-backup/verify-work/${VERIFY_CONTAINER}"
+mkdir -p "${VERIFY_DIR}"
+chmod 0700 "${VERIFY_DIR}"
 
 # ---------------------------------------------------------------------------
-# EXIT trap — unconditionally stop container + wipe identity tmpfs file
+# EXIT trap — stop ephemeral postgres + shred identity + remove work dir
 # ---------------------------------------------------------------------------
 cleanup() {
   docker stop "$VERIFY_CONTAINER" >/dev/null 2>&1 || true
   shred -u "${VERIFY_DIR}/.identity" 2>/dev/null || rm -f "${VERIFY_DIR}/.identity" 2>/dev/null || true
+  # Shred the decrypted dump files so plaintext does not linger on disk.
+  # find avoids a glob expansion error when the dir is already empty.
+  find "${VERIFY_DIR}" -type f -exec shred -u {} \; 2>/dev/null || true
+  rm -rf "${VERIFY_DIR}" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
 # ---------------------------------------------------------------------------
-# 4.5.3 Read age identity from stdin → write to tmpfs (B7 fix)
+# 4.5.3 Read age identity from stdin → write to verify dir (B7 fix)
 # ---------------------------------------------------------------------------
 cd "${VERIFY_DIR}"
 
