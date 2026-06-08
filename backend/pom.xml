@@ -25,6 +25,13 @@
         <postgresql.version>42.7.4</postgresql.version>
         <testcontainers.version>1.20.4</testcontainers.version>
         <rest-assured.version>5.5.0</rest-assured.version>
+        <!-- Pinned explicitly because nimbus-jose-jwt is pulled transitively by
+             spring-security-oauth2-jose; we depend on JWSObject/ECDSASigner directly
+             in TestJwtFactory and want a deterministic version. -->
+        <nimbus-jose-jwt.version>9.40</nimbus-jose-jwt.version>
+        <!-- WireMock 3.x is the supported line for JDK17+/Jetty12. Standalone is
+             pre-shaded so it does not collide with the Spring test context's Jetty. -->
+        <wiremock.version>3.9.2</wiremock.version>
     </properties>
 
     <dependencies>
@@ -42,8 +49,28 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- Security: OAuth2 Resource Server (validates JWTs against Supabase JWKS).
+             See backend-mvp-readonly design.md D1. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+        <!-- TestJwtFactory uses JWSObject + ECDSASigner directly; declare explicitly
+             so the version is reproducible across spring-boot upgrades. -->
+        <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>nimbus-jose-jwt</artifactId>
+            <version>${nimbus-jose-jwt.version}</version>
+        </dependency>
+
         <!-- Data access: jOOQ + Postgres JDBC.
-             We override the Spring-Boot-managed jOOQ version to 3.19+ to match docs/backend-standards.md §1. -->
+             We override the Spring-Boot-managed jOOQ version to 3.19+ to match docs/backend-standards.md §1.
+             starter-jooq pulls spring-jdbc + spring-tx (needed for @Transactional in TransactionService)
+             and the jOOQ auto-configuration that wires DSLContext from the Hikari DataSource. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jooq</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.jooq</groupId>
             <artifactId>jooq</artifactId>
@@ -80,6 +107,16 @@
             <version>${rest-assured.version}</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- WireMock standalone (shaded) for the JWKS endpoint used by SecurityIntegrationTest.
+             Standalone variant prevents Jetty/Servlet version conflicts with the Spring Boot
+             test context. See backend-mvp-readonly tasks.md §3.5. -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>${wiremock.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -99,10 +136,21 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
 
+            <!-- Surefire: enable Byte Buddy experimental support so Mockito can instrument
+                 classes on Java 25 (Byte Buddy 1.15 officially supports up to Java 24). Used
+                 only by tests that need @MockBean (e.g. TransactionServiceAtomicityTest, where
+                 we intercept MerchantUpserter.applyFeedback to force a rollback path). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-Dnet.bytebuddy.experimental=true -XX:+EnableDynamicAgentLoading</argLine>
+                </configuration>
+            </plugin>
+
             <!-- jOOQ codegen plugin: declared but NOT bound to a default phase.
                  Generated sources live under target/generated-sources/jooq/ and are gitignored.
-                 Activate explicitly with: mvn -P codegen generate-sources
-                 Real configuration (jdbc/generator) lands in TASK-BE-02. -->
+                 Activate explicitly with: mvn -P codegen generate-sources -->
             <plugin>
                 <groupId>org.jooq</groupId>
                 <artifactId>jooq-codegen-maven</artifactId>
@@ -117,12 +165,60 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <!-- Add target/generated-sources/jooq/ as a compile source root unconditionally.
+                 Codegen writes there (gitignored) under the `codegen` profile; once generated,
+                 these classes must be on the compile classpath for every subsequent build
+                 (compile, test, package) without re-running codegen. The directory may be empty
+                 when codegen has not been run yet — `mvn compile` will then fail loudly with
+                 "package com.myfinanceview.jooq.generated does not exist", which is the right
+                 signal: re-run `mvn -P codegen generate-sources`. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <id>add-jooq-generated-sources</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.build.directory}/generated-sources/jooq</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
     <profiles>
         <profile>
+            <!--
+                jOOQ codegen profile. Activate with:
+                    mvn -P codegen generate-sources
+
+                Prerequisite: a local Postgres reachable on jdbc:postgresql://localhost:5433/myfinance_local
+                with V001..V005 already applied (docker compose -f docker/docker-compose.yml up -d).
+                Connection settings can be overridden via -Dcodegen.db.url=... etc. The fallbacks
+                match `docker/docker-compose.yml` (port 5433, user/db `myfinance`).
+
+                Output: target/generated-sources/jooq/com/myfinanceview/jooq/generated/myfinance/**
+                The directory is gitignored.
+
+                Inputs covered: myfinance.{accounts,categories,transactions,merchants,banks,
+                user_settings,budgets,budget_categories,exchange_rates}. The auth, public, and
+                pg_* schemas are excluded.
+            -->
             <id>codegen</id>
+            <properties>
+                <codegen.db.url>jdbc:postgresql://localhost:5433/myfinance_local</codegen.db.url>
+                <codegen.db.user>myfinance</codegen.db.user>
+                <codegen.db.password>localpassword</codegen.db.password>
+            </properties>
             <build>
                 <plugins>
                     <plugin>
@@ -138,6 +234,41 @@
                                 </goals>
                             </execution>
                         </executions>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.postgresql</groupId>
+                                <artifactId>postgresql</artifactId>
+                                <version>${postgresql.version}</version>
+                            </dependency>
+                        </dependencies>
+                        <configuration>
+                            <jdbc>
+                                <driver>org.postgresql.Driver</driver>
+                                <url>${codegen.db.url}</url>
+                                <user>${codegen.db.user}</user>
+                                <password>${codegen.db.password}</password>
+                            </jdbc>
+                            <generator>
+                                <database>
+                                    <name>org.jooq.meta.postgres.PostgresDatabase</name>
+                                    <inputSchema>myfinance</inputSchema>
+                                    <!-- Map the auth.users FK target schema so jOOQ doesn't choke on
+                                         cross-schema references; we don't include auth in generated code. -->
+                                    <includes>.*</includes>
+                                    <excludes></excludes>
+                                </database>
+                                <target>
+                                    <packageName>com.myfinanceview.jooq.generated</packageName>
+                                    <directory>target/generated-sources/jooq</directory>
+                                </target>
+                                <generate>
+                                    <records>true</records>
+                                    <pojos>false</pojos>
+                                    <daos>false</daos>
+                                    <fluentSetters>false</fluentSetters>
+                                </generate>
+                            </generator>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>

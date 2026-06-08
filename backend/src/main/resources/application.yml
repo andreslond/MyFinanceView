@@ -10,16 +10,52 @@ spring:
       maximum-pool-size: 5
   jooq:
     sql-dialect: POSTGRES
+  transaction:
+    # design.md D5 + tasks.md §6.5 — short timeout so a stuck PATCH cannot hold a row lock
+    # forever. The feedback loop is at most: 1 SELECT (category guard) + 1 SELECT (tx) + 1 UPDATE
+    # + 1 SELECT/UPSERT (merchant) + 1 UPDATE (merchant) + 1 SELECT (re-fetch). All hit indexed
+    # rows; 5s is generous.
+    default-timeout: 5
 
 server:
   port: 8080
   forward-headers-strategy: framework
 
+# Auth / Supabase JWKS — see openspec/changes/backend-mvp-readonly/design.md D1.
+# At runtime SUPABASE_JWT_JWKS_URI / SUPABASE_JWT_ISSUER come from the environment.
+# In tests they are injected via @DynamicPropertySource by JwksWireMockExtension; blanks are
+# intentional so application-test.yml does not need to repeat them.
+app:
+  auth:
+    supabase:
+      jwks-uri: ${SUPABASE_JWT_JWKS_URI:}
+      issuer: ${SUPABASE_JWT_ISSUER:}
+      audience: authenticated
+
+# Actuator hardening — design.md D11. Only /actuator/health is exposed; all other endpoints
+# are individually disabled so they return 404 (not 403) and do not leak path existence.
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health
   endpoint:
     health:
       show-details: never
+      show-components: never
+    info:
+      enabled: false
+    env:
+      enabled: false
+    configprops:
+      enabled: false
+    heapdump:
+      enabled: false
+    threaddump:
+      enabled: false
+    beans:
+      enabled: false
+    mappings:
+      enabled: false
+    metrics:
+      enabled: false
