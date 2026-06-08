@@ -9,8 +9,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/_common.sh"
 source "${SCRIPT_DIR}/alert.sh"
 
-# Slurp age identity from stdin before anything else consumes it (B7 fix)
-IFS= read -rd '' IDENTITY_CONTENT < /dev/stdin || true
+# Slurp age identity from stdin before anything else consumes it (B7 fix).
+# Note: read defaults to fd 0, no `< /dev/stdin` redirect — Alpine's /dev/stdin
+# symlink can fail with "No such device or address" when fd 0 is a pipe, even
+# when the pipe is valid. The `:-` default guarantees IDENTITY_CONTENT is
+# defined (empty string at worst) so the later `${IDENTITY_CONTENT}` reference
+# does not fire bash -u's unbound-variable trap.
+IFS= read -rd '' IDENTITY_CONTENT || true
+IDENTITY_CONTENT="${IDENTITY_CONTENT:-}"
 unset MYFINANCE_BACKUP_AGE_IDENTITY 2>/dev/null || true
 
 BUCKET="${BACKUP_R2_BUCKET:-my-finance-view-backups}"

@@ -67,7 +67,8 @@ trap cleanup EXIT INT TERM
 cd "${VERIFY_DIR}"
 
 # Read from stdin; Node closes stdin after writing so read -rd '' gets EOF
-IFS= read -rd '' AGE_IDENTITY < /dev/stdin || true
+IFS= read -rd '' AGE_IDENTITY || true
+AGE_IDENTITY="${AGE_IDENTITY:-}"
 
 # Defensive scrub in case the env var was ever set
 unset MYFINANCE_BACKUP_AGE_IDENTITY 2>/dev/null || true

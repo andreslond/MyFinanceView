@@ -16,7 +16,8 @@ RUN_START=$(date +%s)
 # Slurp age identity from stdin (piped by workers.js) — must be first read
 # so we capture it before any subprocess consumes stdin (B7 fix).
 # ---------------------------------------------------------------------------
-IFS= read -rd '' IDENTITY_CONTENT < /dev/stdin || true
+IFS= read -rd '' IDENTITY_CONTENT || true
+IDENTITY_CONTENT="${IDENTITY_CONTENT:-}"
 unset MYFINANCE_BACKUP_AGE_IDENTITY 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
