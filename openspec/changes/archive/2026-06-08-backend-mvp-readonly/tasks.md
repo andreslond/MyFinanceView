@@ -152,16 +152,16 @@
 
 ## 10. STOP — Operator gate antes de aplicar a Supabase remoto
 
-- [ ] 10.1 **STOP — operator gate manual.** Agente publica resumen para el operador: tests verdes (sección 1-9), checklist de pre-V004, backup status del último `daily/` de R2 (referenciar `supabase-backup-policy-replant`)
-- [ ] 10.2 Operator confirma: ejecutar snapshot manual ahora si el último `daily/` tiene >24h o si el state cambió desde el último backup
-- [ ] 10.3 Agente captura state snapshot pre-op vía Supabase MCP `execute_sql`:
+- [x] 10.1 **STOP — operator gate manual.** Agente publica resumen para el operador: tests verdes (sección 1-9), checklist de pre-V004, backup status del último `daily/` de R2 (referenciar `supabase-backup-policy-replant`)
+- [x] 10.2 Operator confirma: ejecutar snapshot manual ahora si el último `daily/` tiene >24h o si el state cambió desde el último backup
+- [x] 10.3 Agente captura state snapshot pre-op vía Supabase MCP `execute_sql`:
   - `SELECT COUNT(*) FROM myfinance.categories` (esperado: 19+, todos system)
   - `SELECT COUNT(*) FROM myfinance.categories WHERE user_id IS NULL` (esperado: 19)
   - `SELECT COUNT(*) FROM myfinance.transactions` (esperado: 362 — o el valor vigente)
   - `SELECT COUNT(*) FROM myfinance.accounts` (esperado: 3)
   - Guardar el snapshot en `progress.md`
-- [ ] 10.4 Agente ejecuta `mcp__claude_ai_Supabase__list_migrations` para confirmar últimas migraciones aplicadas (V001..V003)
-- [ ] 10.5 **OPERATOR INPUT REQUIRED — barrera dura.** Agente publica resumen final del estado (tests verdes, snapshot capturado, migraciones listas) y **ESPERA** una de las siguientes respuestas literales del operador antes de pasar a §11:
+- [x] 10.4 Agente ejecuta `mcp__claude_ai_Supabase__list_migrations` para confirmar últimas migraciones aplicadas (V001..V003)
+- [x] 10.5 **OPERATOR INPUT REQUIRED — barrera dura.** Agente publica resumen final del estado (tests verdes, snapshot capturado, migraciones listas) y **ESPERA** una de las siguientes respuestas literales del operador antes de pasar a §11:
   - `proceed` — agente continúa con §11.1 (apply V004 a remoto)
   - `pause` o cualquier otra cosa — agente NO ejecuta §11; registra blocker en `progress.md` con timestamp + mensaje del operador y termina la sesión
   - Sin respuesta en 24h — agente NO ejecuta §11; registra blocker `operator_gate_timeout` en `progress.md` y termina la sesión. La continuación es operador-iniciada explícitamente en una nueva sesión `/opsx:apply --resume`.
@@ -187,9 +187,9 @@
 
 ## 12. Cierre
 
-- [ ] 12.1 Actualizar `progress.md` final (last_completed, next_step="ready for PR", blockers=[])
-- [ ] 12.2 Segunda pasada de adversarial review sobre proposal+design+spec+tasks reescritos (Task #7 del meta-plan)
-- [ ] 12.3 Resolver Blockers/Majors residuales si los hay
+- [x] 12.1 Actualizar `progress.md` final (last_completed, next_step="ready for PR", blockers=[])
+- [x] 12.2 Segunda pasada de adversarial review sobre proposal+design+spec+tasks reescritos (Task #7 del meta-plan)
+- [x] 12.3 Resolver Blockers/Majors residuales si los hay
 - [ ] 12.4 Commit con `/commit`, PR a `main` (push del worktree branch `feat/backend-mvp-readonly`)
 - [ ] 12.5 Merge a `main` (operator-approved)
 - [ ] 12.6 `/opsx:archive` el change `backend-mvp-readonly`
