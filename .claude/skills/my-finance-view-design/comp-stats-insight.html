@@ -1,0 +1,67 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="ds-card.css">
+<style>
+  .section { margin-bottom: 18px; }
+  .section:last-child { margin-bottom: 0; }
+  .trio { display: flex; gap: 8px; }
+  .mini { flex: 1; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+  .mini.accent { background: linear-gradient(135deg, var(--c-cyan-soft), transparent), var(--surface); border-color: var(--c-cyan-soft); }
+  .mini .lbl { font-size: 10px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+  .mini .val { font-size: 18px; font-weight: 600; margin-top: 4px; letter-spacing: -0.6px; font-feature-settings: 'tnum' 1; }
+  .mini .delta { font-family: 'Geist Mono'; font-size: 10px; margin-top: 2px; font-weight: 600; color: var(--c-positive); }
+  .quad { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-width: 320px; }
+  .pstat { padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+  .pstat .head { display: flex; align-items: center; justify-content: space-between; }
+  .pstat .lbl { font-size: 10px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .pstat .dot { width: 6px; height: 6px; border-radius: 3px; }
+  .pstat .val { font-size: 17px; font-weight: 600; margin-top: 4px; letter-spacing: -0.5px; font-feature-settings: 'tnum' 1; }
+  .pstat .delta { font-family: 'Geist Mono'; font-size: 10px; margin-top: 1px; font-weight: 600; }
+  .insight { padding: 16px; background: linear-gradient(135deg, var(--c-purple-soft), transparent 70%), var(--surface); border: 1px solid var(--c-purple-soft); border-radius: 18px; max-width: 340px; }
+  .insight .head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .insight .ico { width: 24px; height: 24px; border-radius: 8px; background: var(--c-purple); color: #fff; display: flex; align-items: center; justify-content: center; }
+  .insight .eyebrow { font-size: 11px; color: var(--c-purple); font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; }
+  .insight .body { font-size: 14px; font-weight: 500; line-height: 1.45; text-wrap: pretty; }
+  .insight .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .insight button { padding: 7px 14px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+  .insight .ghost { border: 1px solid var(--border-2); background: transparent; color: var(--text); }
+  .insight .solid { background: var(--text); color: var(--bg); border: none; font-weight: 600; }
+</style>
+</head>
+<body><div class="dsc">
+  <h2 class="dsc-h">Stat cards + insight</h2>
+  <p class="dsc-sub">Three layouts for the same family of numbers. Pick by density and emphasis.</p>
+
+  <div class="section">
+    <div class="eyebrow">MiniStat · trio (Home B)</div>
+    <div class="trio">
+      <div class="mini"><div class="lbl">Income</div><div class="val">+$4.2k</div><div class="delta">+8%</div></div>
+      <div class="mini"><div class="lbl">Spent</div><div class="val">$2.5k</div><div class="delta">−12%</div></div>
+      <div class="mini accent"><div class="lbl">Saved</div><div class="val">$1.7k</div><div class="delta">+24%</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="eyebrow">PowerStat · grid (Home C)</div>
+    <div class="quad">
+      <div class="pstat"><div class="head"><div class="lbl">Income</div><div class="dot" style="background:#34E0A1"></div></div><div class="val">$4.2k</div><div class="delta" style="color:#34E0A1">+8%</div></div>
+      <div class="pstat"><div class="head"><div class="lbl">Spent</div><div class="dot" style="background:#7C5CFF"></div></div><div class="val">$2.5k</div><div class="delta" style="color:#34E0A1">−12%</div></div>
+      <div class="pstat"><div class="head"><div class="lbl">Saved</div><div class="dot" style="background:#22D3EE"></div></div><div class="val">$1.7k</div><div class="delta" style="color:#34E0A1">+24%</div></div>
+      <div class="pstat"><div class="head"><div class="lbl">Net</div><div class="dot" style="background:#FAFAFB"></div></div><div class="val">$1.7k</div><div class="delta" style="color:#34E0A1">+2.4%</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="eyebrow">Insight card (Home B)</div>
+    <div class="insight">
+      <div class="head">
+        <div class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/></svg></div>
+        <span class="eyebrow">This week</span>
+      </div>
+      <div class="body">You spent <b style="font-family:'Geist Mono'">$132</b> more on <b>Shopping</b> than your weekly average. The Amazon keyboard is the outlier — flag it?</div>
+      <div class="actions">
+        <button class="ghost">Review</button>
+        <button class="solid">Flag purchase</button>
+      </div>
+    </div>
+  </div>
+</div></body></html>

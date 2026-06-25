@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="ds-card.css">
+<style>
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .demo { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 16px; height: 110px; display: flex; flex-direction: column; justify-content: space-between; }
+  .demo b { font-size: 12px; font-weight: 600; }
+  .demo span { font-family: 'Geist Mono'; font-size: 10px; color: var(--text-2); line-height: 1.4; }
+  .fab { width: 44px; height: 44px; border-radius: 16px; background: #7C5CFF; box-shadow: 0 6px 18px rgba(124,92,255,0.45); display: flex; align-items: center; justify-content: center; color: #fff; }
+</style>
+</head>
+<body><div class="dsc">
+  <h2 class="dsc-h">Elevation + shadow</h2>
+  <p class="dsc-sub">Subtle in light, soft + diffuse in dark. Brand-tinted glow on FABs.</p>
+  <div class="grid">
+    <div class="demo" style="box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4)">
+      <b>--shadow · dark</b>
+      <span>0 10px 30px rgba(0,0,0,0.4)<br><br>Cards in dark mode use a diffuse drop to lift off the near-black bg.</span>
+    </div>
+    <div class="demo light" style="background:#FFFFFF;color:#0B0B0F;border:1px solid rgba(11,11,15,0.08);box-shadow:0 4px 14px rgba(11,11,15,0.06)">
+      <b>--shadow · light</b>
+      <span style="color:rgba(11,11,15,0.62)">0 4px 14px rgba(11,11,15,0.06)<br><br>Much tighter in light — almost just a hairline lift.</span>
+    </div>
+    <div class="demo" style="position:relative;align-items:center;justify-content:center">
+      <div class="fab">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </div>
+      <div style="position:absolute;bottom:14px;left:14px;right:14px">
+        <b>FAB glow</b>
+        <div><span>0 6px 18px rgba(124,92,255,0.45)<br>Used on the primary tab-bar action.</span></div>
+      </div>
+    </div>
+  </div>
+</div></body></html>

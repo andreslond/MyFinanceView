@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="ds-card.css">
+<style>
+  .stack { display: flex; flex-direction: column; gap: 14px; }
+  .specimen { display: grid; grid-template-columns: 110px 1fr; gap: 24px; align-items: baseline; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .specimen:last-child { border-bottom: none; padding-bottom: 0; }
+  .specimen .meta { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10px; color: var(--text-2); line-height: 1.45; }
+  .specimen .meta b { color: var(--text); font-weight: 600; display: block; font-size: 11px; }
+  .gm { font-family: 'Geist Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .ticker { display: flex; gap: 14px; align-items: baseline; }
+  .ticker b { font-size: 18px; font-weight: 600; }
+  .ticker span { font-size: 11px; color: var(--text-2); }
+  .pos { color: var(--c-positive); }
+  .neg { color: var(--c-negative); }
+</style>
+</head>
+<body><div class="dsc">
+  <h2 class="dsc-h">Numbers · Geist Mono</h2>
+  <p class="dsc-sub">All numerics use Geist Mono with tabular numerals — so columns of dollars align without jitter.</p>
+  <div class="stack">
+    <div class="specimen">
+      <div class="meta"><b>Mono small</b>11 / 600<br>tnum</div>
+      <div class="sample gm" style="font-size:11px;font-weight:600">+8% · −12% · +24% · +2.4%</div>
+    </div>
+    <div class="specimen">
+      <div class="meta"><b>Stat value</b>17 / 600<br>−0.5 tracking</div>
+      <div class="sample gm" style="font-size:17px;font-weight:600;letter-spacing:-0.5px">$4.2k · $2.5k · $1.7k</div>
+    </div>
+    <div class="specimen">
+      <div class="meta"><b>Money cents</b>15 / 600 + 11 trailing</div>
+      <div class="sample">
+        <span style="font-family:Geist;font-size:15px;font-weight:600;font-feature-settings:'tnum' 1">$54</span><span class="gm" style="font-size:11px;color:var(--text-2)">.99</span>
+      </div>
+    </div>
+    <div class="specimen">
+      <div class="meta"><b>Sign chips</b>11 / 600</div>
+      <div class="sample">
+        <div class="ticker">
+          <span class="gm pos" style="font-weight:700">↑ +$4,200<span style="opacity:.7">.00</span></span>
+          <span class="gm neg" style="font-weight:700">↓ −$84<span style="opacity:.7">.32</span></span>
+        </div>
+      </div>
+    </div>
+    <div class="specimen">
+      <div class="meta"><b>Aligned column</b>tnum<br>right-aligned</div>
+      <div class="sample gm" style="font-size:13px">
+        <div style="display:grid;grid-template-columns:1fr auto;gap:4px;max-width:240px">
+          <span>Spotify</span><span>$12.99</span>
+          <span>Whole Foods</span><span>$84.32</span>
+          <span>Amazon</span><span>$132.00</span>
+          <span>AirBnB</span><span>$548.99</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></body></html>

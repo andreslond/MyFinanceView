@@ -1,0 +1,79 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="ds-card.css">
+<style>
+  .section { margin-bottom: 18px; }
+  .section:last-child { margin-bottom: 0; }
+  .row-demo { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .row-demo + .meta { font-family: 'Geist Mono'; font-size: 10px; color: var(--text-2); margin-top: 8px; }
+  /* Quick action */
+  .qa { flex: 0 0 86px; padding: 11px 4px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--text); font-size: 10px; font-weight: 500; position: relative; }
+  .qa-badge { position: absolute; top: 4px; right: 18px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--c-purple); color: #fff; font-family: 'Geist Mono'; font-size: 9px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; border: 2px solid var(--bg); }
+  /* Icon button */
+  .iconbtn { width: 36px; height: 36px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); color: var(--text); display: flex; align-items: center; justify-content: center; position: relative; }
+  .iconbtn .dot { position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border-radius: 3px; background: var(--c-negative); }
+  /* CTAs */
+  .btn { height: 46px; padding: 0 18px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 600; cursor: default; }
+  .btn.primary { background: var(--text); color: var(--bg); }
+  .btn.ghost { background: var(--chip-bg); color: var(--text); border: 1px solid var(--border); }
+  .btn.brand { background: var(--c-purple); color: #fff; }
+  .btn.sm { height: 36px; padding: 0 14px; font-size: 12px; border-radius: 12px; }
+  /* Pills */
+  .pill { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+  /* FAB */
+  .fab { width: 44px; height: 44px; border-radius: 16px; background: linear-gradient(135deg, #7C5CFF 0%, #6244FF 100%); box-shadow: 0 6px 18px rgba(124,92,255,0.45); color: #fff; display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body><div class="dsc">
+  <h2 class="dsc-h">Buttons + chips</h2>
+  <p class="dsc-sub">Quick-action grid, icon buttons, primary/ghost/brand CTAs, the FAB, and the chip system.</p>
+
+  <div class="section">
+    <div class="eyebrow">Quick actions (Home A row)</div>
+    <div class="row-demo">
+      <div class="qa">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add
+      </div>
+      <div class="qa">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>Scan
+      </div>
+      <div class="qa">
+        <span class="qa-badge">3</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>Unclassified
+      </div>
+      <div class="qa">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 16 9 10 13 14 21 6"/><polyline points="15 6 21 6 21 12"/></svg>Forecast
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="eyebrow">Icon buttons</div>
+    <div class="row-demo">
+      <div class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+      <div class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><div class="dot"></div></div>
+      <div class="fab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="eyebrow">CTAs · primary · ghost · brand</div>
+    <div class="row-demo">
+      <div class="btn primary">Confirm &amp; save <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <div class="btn ghost">Recategorize</div>
+      <div class="btn brand">Connect inbox</div>
+      <div class="btn primary sm">Add</div>
+      <div class="btn ghost sm">Split</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="eyebrow">Chips · pills · status</div>
+    <div class="row-demo">
+      <span class="pill" style="background:rgba(52,224,161,0.14);color:var(--c-positive)">↑ +2.4%</span>
+      <span class="pill" style="background:rgba(255,107,107,0.14);color:var(--c-negative)">↓ −12%</span>
+      <span class="pill" style="background:var(--c-cyan-soft);color:var(--c-cyan)">✉ Email-sourced</span>
+      <span class="pill" style="background:var(--c-purple-soft);color:var(--c-purple)">✨ This week</span>
+      <span class="pill" style="background:var(--chip-bg);color:var(--text-2)">Visa ····4082</span>
+    </div>
+  </div>
+</div></body></html>

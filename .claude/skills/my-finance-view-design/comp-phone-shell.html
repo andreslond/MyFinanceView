@@ -1,0 +1,59 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="ds-card.css">
+<style>
+  .stage { display: flex; gap: 24px; align-items: flex-start; }
+  .phone { width: 280px; height: 540px; border-radius: 36px; background: var(--bg); border: 1px solid var(--border); box-shadow: var(--shadow); overflow: hidden; position: relative; display: flex; flex-direction: column; }
+  .status { height: 34px; padding: 12px 18px 6px; display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; }
+  .body { flex: 1; padding: 16px; }
+  .body h3 { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
+  .body p { font-size: 12px; color: var(--text-2); margin: 0; line-height: 1.45; }
+  .tabbar { position: absolute; bottom: 0; left: 0; right: 0; padding: 10px 14px 14px; }
+  .tabbar-inner { height: 60px; border-radius: 22px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); display: flex; align-items: center; justify-content: space-around; padding: 0 6px; position: relative; }
+  .tab { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px; color: var(--text-3); font-size: 10px; font-weight: 500; }
+  .tab.active { color: var(--text); }
+  .fab { width: 48px; height: 48px; border-radius: 16px; background: linear-gradient(135deg, #7C5CFF 0%, #6244FF 100%); box-shadow: 0 6px 18px rgba(124,92,255,0.45); color: #fff; display: flex; align-items: center; justify-content: center; transform: translateY(-12px); }
+  .notes { flex: 1; }
+  .notes h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+  .notes ul { margin: 0; padding-left: 16px; font-size: 12px; color: var(--text-2); line-height: 1.6; }
+  .notes ul b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body><div class="dsc">
+  <h2 class="dsc-h">PhoneShell + tab bar</h2>
+  <p class="dsc-sub">Frame for every screen. Custom 38px status bar (we don't use the full iOS chrome), scrollable body, floating 22-radius tab bar with raised purple FAB.</p>
+  <div class="stage">
+    <div class="phone">
+      <div class="status">
+        <span>9:41</span>
+        <span style="display:flex;gap:5px;align-items:center">
+          <svg width="13" height="8" viewBox="0 0 13 8"><circle cx="6.5" cy="7" r="1" fill="currentColor"/></svg>
+          <svg width="22" height="10" viewBox="0 0 22 10"><rect x="0.4" y="0.4" width="18.8" height="9.2" rx="2.8" stroke="currentColor" stroke-opacity="0.35" fill="none"/><rect x="1.6" y="1.6" width="16" height="6.8" rx="1.5" fill="currentColor"/></svg>
+        </span>
+      </div>
+      <div class="body">
+        <h3>Scrollable content</h3>
+        <p>Padding-bottom 86 to clear the floating tab bar. The pull-to-refresh listener lives here.</p>
+      </div>
+      <div class="tabbar">
+        <div class="tabbar-inner">
+          <div class="tab active"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2h-4v-7H10v7H6a2 2 0 0 1-2-2V9z"/></svg>Home</div>
+          <div class="tab"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>Goals</div>
+          <div class="fab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+          <div class="tab"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Stats</div>
+          <div class="tab"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Me</div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <h3>Anatomy</h3>
+      <ul>
+        <li><b>Frame</b> 280×540 (actual prototype 320×660), radius 36, bg = var(--bg)</li>
+        <li><b>Status bar</b> 38px, 12 / 600, monospace time, signal + battery glyphs</li>
+        <li><b>Body</b> flex:1, overflow-y auto, padding-bottom 86</li>
+        <li><b>Tab bar</b> 60h pill, 14px side margin, 5 slots, surface bg, --shadow</li>
+        <li><b>FAB</b> 48×48 r16, purple gradient, +18 shadow glow, translateY −12</li>
+        <li><b>Pull-to-refresh</b> wired at the body level; spinner reveals above content when pulled past 56px threshold</li>
+      </ul>
+    </div>
+  </div>
+</div></body></html>
