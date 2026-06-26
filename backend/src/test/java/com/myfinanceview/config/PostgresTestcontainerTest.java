@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The init scripts are applied manually (read file then execute) instead of {@code .withInitScript()}
  * because the latter only accepts a single script. We need V000 (local-only Supabase parity stubs)
  * from backend/database/local/ then V001..V003 from backend/database/migrations/ in order. See
- * openspec/changes/archive/2026-05-13-backend-scaffolding/design.md D6 for the rationale behind the directory split.
+ * archive/openspec-legacy/changes/archive/2026-05-13-backend-scaffolding/design.md D6 for the rationale behind the directory split.
  * The locator below walks up from cwd, so tests work whether run from repo root or from backend/.
  *
  * <p><b>Container lifecycle:</b> manual start (no {@code @Testcontainers} / {@code @Container}).

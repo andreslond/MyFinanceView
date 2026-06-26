@@ -1,0 +1,33 @@
+{
+  "$comment": "OPT-IN (no activo). Hooks del harness Uncle Bob. Para activarlos, fusiona este bloque en .claude/settings.json (o pidele a Claude Code que lo haga con /config / update-config; requiere tu autorizacion explicita porque añade hooks auto-ejecutables y permisos). PostToolUse esta ACOTADO al dominio puro: el wrapper solo corre tests cuando el archivo editado esta bajo .../com/myfinanceview/domain/** (no-op para frontend/infra/docs/controllers/repos). Stop corre init.ps1 (verificacion read-only). Ambos son best-effort, no bloquean. El proyecto retiro un SessionStart hook intrusivo antes (ver CLAUDE.md), por eso estos se mantienen baratos, acotados y vetables.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/harness/post-edit-domain-test.ps1"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File init.ps1"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(mvnd:*)",
+      "Bash(cd backend && mvnd:*)",
+      "Bash(grep:*)"
+    ]
+  }
+}

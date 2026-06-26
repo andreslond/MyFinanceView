@@ -7,7 +7,7 @@
 -- Creates `myfinance.merchants` for the categorization feedback loop and adds
 -- the nullable FK column `transactions.merchant_id` plus its partial index.
 --
--- See openspec/changes/backend-mvp-readonly/design.md §D8 (schema) and §D5
+-- See archive/openspec-legacy/changes/archive/2026-06-08-backend-mvp-readonly/design.md §D8 (schema) and §D5
 -- (feedback loop semantics). RLS policies mirror `accounts_*` from V002 —
 -- backend uses `service_role` (RLS-bypass) but the policies stay enabled as
 -- defence in depth.

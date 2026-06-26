@@ -1,0 +1,88 @@
+{
+  "project": "myfinanceview-domain",
+  "description": "Cola de features del dominio puro de MyFinanceView para el harness Uncle Bob (conversación → Gherkin → TDD → review → mutación). Solo el núcleo funcional puro bajo backend/src/main/java/com/myfinanceview/domain/**. Las migraciones SQL, repositorios jOOQ y endpoints REST que consumen estas features van por fuera del harness. Autoridad de diseño: SPEC.md, docs/data-model.md, docs/base-standards.md, docs/backend-standards.md y plans/. NOTA: este backlog es un PUNTO DE PARTIDA; el spec_partner lo refina por feature al conversarla.",
+  "scope": {
+    "src": "backend/src/main/java/com/myfinanceview/domain/**",
+    "tests": "backend/src/test/java/com/myfinanceview/domain/**"
+  },
+  "rules": {
+    "one_feature_at_a_time": true,
+    "require_tests_to_close": true,
+    "require_approved_spec_to_implement": true,
+    "valid_status": ["pending", "spec_ready", "in_progress", "done", "blocked"],
+    "sdd_required_when": "feature has \"sdd\": true",
+    "mutation_threshold": "100% sobre líneas nuevas o tocadas por la feature"
+  },
+  "phases": {
+    "1": "Períodos y categorización: lógica pura que el backend REST ya necesita (facturación por día de corte, reglas de categorización determinista). Features 1-2.",
+    "2": "Comercios y metas: matching de merchants y progreso de metas de ahorro. Features 3-4."
+  },
+  "features": [
+    {
+      "id": 1,
+      "name": "billing_period_resolution",
+      "title": "Resolución del período de facturación por día de corte (dominio billing)",
+      "description": "Función pura que, dado un día de corte (cutDay) de una tarjeta y la fecha de un movimiento, resuelve el período de facturación [inicio, fin] al que pertenece. Equivalente de dominio al get_billing_period pendiente (TASK-DB-03). No conoce la tarjeta concreta ni la DB: recibe el cutDay y la fecha como parámetros.",
+      "acceptance": [
+        "Existe backend/src/main/java/com/myfinanceview/domain/billing/ con un método puro resolveBillingPeriod(cutDay, transactionDate) -> BillingPeriod (record con start/end como LocalDate o OffsetDateTime UTC)",
+        "Un movimiento con fecha posterior al día de corte cae en el período que cierra el siguiente corte; uno anterior o igual al corte cae en el período actual (convención de bordes documentada por el spec_partner)",
+        "Maneja meses de distinta longitud y el caso cutDay > días del mes (p.ej. corte 31 en febrero) sin adivinar en silencio",
+        "cutDay fuera de rango [1..31] lanza excepción de dominio visible (anti-adivinanza)",
+        "Sin Instant.now()/LocalDate.now(); la fecha entra como parámetro",
+        "Trazabilidad @s -> test",
+        "Mutación: 100% sobre líneas nuevas"
+      ],
+      "sdd": true,
+      "status": "pending"
+    },
+    {
+      "id": 2,
+      "name": "transaction_categorization_rules",
+      "title": "Categorización determinista por reglas (dominio category)",
+      "description": "Camino rápido y puro de categorización ANTES del LLM: dado un movimiento normalizado (comercio, monto, tipo) y un conjunto de reglas, asigna una categoría conocida de forma determinista. Lo que ninguna regla resuelve NO se inventa: se marca como no-categorizado explícito para que el feedback-loop/LLM decida.",
+      "acceptance": [
+        "Existe backend/src/main/java/com/myfinanceview/domain/category/ con categorize(transaction, rules) -> CategoryMatch (categoría conocida o NO_MATCH explícito)",
+        "Reglas deterministas e idempotentes sobre el mismo input",
+        "Ambiguedad o ausencia de regla NO cae a una categoría por defecto en silencio (anti-adivinanza): devuelve NO_MATCH explícito",
+        "Las categorías referencian el catálogo del proyecto (name en inglés, display_name en español; ver memoria del proyecto), no strings sueltos",
+        "Trazabilidad @s -> test",
+        "Mutación: 100% sobre líneas nuevas"
+      ],
+      "sdd": true,
+      "status": "pending"
+    },
+    {
+      "id": 3,
+      "name": "merchant_matching",
+      "title": "Normalización y matching de comercios (dominio merchant)",
+      "description": "Función pura que toma el texto crudo de comercio de un email bancario y lo empareja contra el catálogo de merchants conocidos (tabla merchants, sembrada en TASK-DB-04). Devuelve el merchant canónico o un no-match explícito. No accede a la DB: recibe los merchants conocidos como parámetro.",
+      "acceptance": [
+        "Existe backend/src/main/java/com/myfinanceview/domain/merchant/ con matchMerchant(rawDescriptor, knownMerchants) -> MerchantMatch",
+        "Normalización determinista (mayúsculas, espacios, ruido del descriptor bancario) documentada por el spec_partner",
+        "Sin coincidencia clara -> no-match explícito (anti-adivinanza), nunca un merchant inventado",
+        "Idempotente sobre el mismo input",
+        "Trazabilidad @s -> test",
+        "Mutación: 100% sobre líneas nuevas"
+      ],
+      "sdd": true,
+      "status": "pending"
+    },
+    {
+      "id": 4,
+      "name": "savings_goal_progress",
+      "title": "Progreso de una meta de ahorro (dominio savings)",
+      "description": "Función pura que, dada una meta (objetivo, fecha límite) y sus aportes, calcula el progreso: monto acumulado, porcentaje, restante y ritmo requerido. Dinero en BigDecimal HALF_EVEN escala 2. Base del savings_goals pendiente.",
+      "acceptance": [
+        "Existe backend/src/main/java/com/myfinanceview/domain/savings/ con computeProgress(goal, contributions, asOf) -> GoalProgress (record)",
+        "accumulated = suma de aportes en BigDecimal HALF_EVEN escala 2; percentage = accumulated/target acotado a [0,100]",
+        "El 'asOf' (ahora) entra como parámetro; sin OffsetDateTime.now()",
+        "target <= 0 lanza excepción de dominio (anti-adivinanza); meta ya cumplida reporta 100% sin sobrepasar",
+        "Idempotente sobre el mismo input",
+        "Trazabilidad @s -> test",
+        "Mutación: 100% sobre líneas nuevas"
+      ],
+      "sdd": true,
+      "status": "pending"
+    }
+  ]
+}

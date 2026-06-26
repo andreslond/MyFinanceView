@@ -8,7 +8,7 @@
 # To re-apply migrations on this volume, `docker compose down -v && up -d`.
 # Init scripts do NOT re-run on subsequent restarts of the same volume.
 #
-# See openspec/changes/backend-scaffolding/design.md D6 (init-script orchestration)
+# See archive/openspec-legacy/changes/archive/2026-05-13-backend-scaffolding/design.md D6 (init-script orchestration)
 # and TASK-DB-06 (Notion) for the Flyway adoption that will replace this.
 
 services:

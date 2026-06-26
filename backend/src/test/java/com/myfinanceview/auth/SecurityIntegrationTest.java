@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Integration tests for the OAuth2 Resource Server wiring — covers all scenarios of the
  * "JWT authentication via Supabase JWKS (ES256)" Requirement in
- * {@code openspec/changes/backend-mvp-readonly/specs/backend-rest-api/spec.md}.
+ * {@code archive/openspec-legacy/changes/archive/2026-06-08-backend-mvp-readonly/specs/backend-rest-api/spec.md}.
  *
  * <p>Strategy (per design.md D1):
  * <ul>

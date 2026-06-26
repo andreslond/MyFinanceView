@@ -12,9 +12,9 @@ Documents are not equal. When they conflict, the higher-priority one wins.
 1. SPEC.md            ← project north-star (vision, stack, key decisions)
 2. docs/*.md          ← detailed standards (this and siblings)
 3. plans/*.md         ← per-feature plans
-4. openspec/changes/  ← per-change artifacts (proposal, design, specs, tasks)
+4. AGENTS.md + docs/uncle-bob/  ← Uncle Bob harness (current domain flow): feature_list.json, project-spec.md, features/, progress/
 5. Notion             ← dynamic backlog (épicas, tareas, DoD)
-6. archive/*          ← historical only, never authoritative
+6. archive/*          ← historical only (incl. archive/openspec-legacy/), never authoritative
 ```
 
 If you find guidance somewhere not listed above (e.g. CLAUDE.md hints, AGENTS.md), treat it as a pointer to one of the above, not as its own source.
@@ -33,7 +33,7 @@ If you find guidance somewhere not listed above (e.g. CLAUDE.md hints, AGENTS.md
 
 **Inter-module communication:** plain Spring `@Service` calls inside the same context. No events, no message queues, no internal HTTP.
 
-**Infrastructure carve-out (amendment 2026-05-13 — see SPEC.md §🏛️ "Excepción explícita"):** the microservices prohibition applies to the application domain only. *Infrastructure* services — n8n (Gmail ingest), `myfinance-backup-runner` (sidecar for encrypted snapshots), Traefik, Uptime Kuma — may live as separate processes under `scripts/<infra-domain>/` because they do not implement business rules and replacing them does not touch the Spring Boot deployable. Each new infra service requires an explicit `design.md` justification in the change that introduces it, plus a SPEC.md reference. The carve-out is narrow: it covers infrastructure that *supports* the application, not pieces of the application factored into separate processes. Originated from adversarial-review of [`supabase-backup-policy`](../openspec/changes/supabase-backup-policy/) (finding #2).
+**Infrastructure carve-out (amendment 2026-05-13 — see SPEC.md §🏛️ "Excepción explícita"):** the microservices prohibition applies to the application domain only. *Infrastructure* services — n8n (Gmail ingest), `myfinance-backup-runner` (sidecar for encrypted snapshots), Traefik, Uptime Kuma — may live as separate processes under `scripts/<infra-domain>/` because they do not implement business rules and replacing them does not touch the Spring Boot deployable. Each new infra service requires an explicit `design.md` justification in the change that introduces it, plus a SPEC.md reference. The carve-out is narrow: it covers infrastructure that *supports* the application, not pieces of the application factored into separate processes. Originated from adversarial-review of `supabase-backup-policy` (finding #2; archived at `archive/openspec-legacy/changes/supabase-backup-policy/`).
 
 ## 3. Development Methodology
 
@@ -45,30 +45,26 @@ The project applies three composable disciplines:
 
 ### Workflow (per change)
 
-Canonical flow + the **4 mandatory human-in-the-loop gates** live in [`workflow.md`](workflow.md). When the summary below and `workflow.md` disagree, `workflow.md` wins. The side-window visual is [`workflow-cheatsheet.html`](workflow-cheatsheet.html).
+For domain work, see **[AGENTS.md](../AGENTS.md)** (nav map) and **[docs/uncle-bob/workflow.md](uncle-bob/workflow.md)** (full pipeline). For non-domain work (controllers, repos, migrations, infra), use `backend-developer` directly.
 
-Phases (gates in **bold**):
+Pipeline (domain, one feature at a time, ⏸ = human gate):
 
 ```
-1. /enrich-us              — refine the user story
-2. /opsx:explore (opt)     — research before propose
-   ── Gate A: ARCHITECTURE DECISIONS (operator approves each, one at a time) ──
-3. /opsx:propose           — proposal.md + design.md + specs/
-   ── Gate B: TASK PLAN (operator approves bullet plan before tasks.md) ──
-4. /opsx:propose           — tasks.md
-   ── Gate D: START IMPLEMENTATION (operator confirms subagent + batch) ──
-5. /opsx:apply             — implement, delegating to backend-developer
-6. adversarial-review      — red-team independent review
-   ── Gate C: FINDING TRIAGE (Blocker/Major auto-in, Minor/Question need OK) ──
-7. /commit                 — focused commit + PR
-8. /opsx:archive → /openspec-sync-specs → /update-docs
+1. /enrich-us (opt.)     — refine a fuzzy story before the spec conversation
+2. spec_partner           — conversación → project-spec.md
+3. gherkin_author         — → features/<name>.feature
+   ── ⏸ HUMAN APPROVES SCENARIOS ──
+4. tdd_craftsman          — RED → GREEN → REFACTOR (one test at a time)
+5. judge                  — review; APPROVED or REJECTED
+6. mutation_tester        — PIT 100% on new lines
+7. /commit                — focused commit + PR
 ```
 
-Skipping a phase OR a gate requires justification in the commit body. Gates without operator OK are a process bug, not a feature — interrupt and call it out.
+Skipping the human gate on `.feature` requires justification in the commit body.
 
 ### Session-start expectations (harness)
 
-Every non-trivial session in this repo MUST run `scripts/preflight.ps1` and report its output before code edits or commits — see the directive in [`CLAUDE.md`](../CLAUDE.md) `## Workflow (per change)` and the long-form description in [`workflow.md §0`](workflow.md). Each active change under `openspec/changes/<id>/` carries a live `progress.md` (YAML) maintained by the `backend-developer` subagent per closed task; `/opsx:apply` reads it to resume across session compactions. There is **no SessionStart hook** — preflight is agent-invoked per the operator's preference; see `openspec/specs/harness-progress-tracking/spec.md` (when archived).
+Every non-trivial session in this repo MUST run `init.ps1` and report its output before code edits or commits — see the directive in [`CLAUDE.md`](../CLAUDE.md) `## Workflow — the Uncle Bob harness` and the full pipeline in [`docs/uncle-bob/workflow.md`](uncle-bob/workflow.md). The harness tracks progress in `progress/current.md` + `feature_list.json`; the `tdd_craftsman` subagent updates these per phase. There is **no SessionStart hook** — `init.ps1` is agent-invoked per the operator's preference.
 
 ## 4. Code Quality Bar
 
@@ -140,10 +136,10 @@ This project actively uses AI coding assistants (Claude Code primarily, others v
 
 A change is done when **all** of the following are true:
 
-- [ ] Spec exists in `openspec/specs/` (or amended) and acceptance criteria are listed.
+- [ ] Spec exists in `features/<name>.feature` (harness) or `project-spec.md` (updated), and acceptance criteria are listed.
 - [ ] Code is implemented and follows §2 (architecture) and §4 (quality).
 - [ ] Tests at the appropriate level are green (§5).
 - [ ] An adversarial review has been performed (skill or subagent), all Blockers resolved.
 - [ ] `/update-docs` has run; SPEC.md/Notion reflect reality.
 - [ ] Commit is focused, in English, imperative, with co-author line.
-- [ ] OpenSpec change is archived.
+- [ ] Feature status marked `done` in `feature_list.json`; `progress/history.md` updated.

@@ -127,7 +127,7 @@
                 <configuration>
                     <release>25</release>
                     <!-- No preview flags: every Java 25 feature we need (Records, pattern matching for switch,
-                         Virtual Threads, sealed types) is stabilised. See openspec/changes/backend-scaffolding/design.md D1. -->
+                         Virtual Threads, sealed types) is stabilised. See archive/openspec-legacy/changes/archive/2026-05-13-backend-scaffolding/design.md D1. -->
                 </configuration>
             </plugin>
 
@@ -191,6 +191,44 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+
+            <!-- PIT (pitest) mutation testing — harness Uncle Bob (docs/uncle-bob/mutation-testing.md).
+                 Reemplaza al stryker.conf.json del harness TS de referencia. Acotado al dominio puro
+                 (com.myfinanceview.domain.*); el agente mutation_tester lo invoca con override de
+                 -DtargetClasses/-DtargetTests por feature. NO bound a ninguna fase: se corre a mano con
+                 `mvnd org.pitest:pitest-maven:mutationCoverage`. Reporte en target/pit-reports/.
+                 Nota: requiere el modulo compilado (codegen jOOQ corrido). Verificar versiones contra
+                 el JDK 25 la primera vez que se ejecute. -->
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <version>1.17.4</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-junit5-plugin</artifactId>
+                        <version>1.2.1</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <targetClasses>
+                        <param>com.myfinanceview.domain.*</param>
+                    </targetClasses>
+                    <targetTests>
+                        <param>com.myfinanceview.domain.*</param>
+                    </targetTests>
+                    <mutators>
+                        <mutator>STRONGER</mutator>
+                    </mutators>
+                    <outputFormats>
+                        <param>HTML</param>
+                        <param>XML</param>
+                    </outputFormats>
+                    <timestampedReports>false</timestampedReports>
+                    <mutationThreshold>100</mutationThreshold>
+                    <failWhenNoMutations>false</failWhenNoMutations>
+                </configuration>
             </plugin>
         </plugins>
     </build>

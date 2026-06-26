@@ -18,10 +18,9 @@
 >    - [`frontend-standards.md`](docs/frontend-standards.md) — placeholder.
 >    - [`api-spec.yml`](docs/api-spec.yml) — contrato OpenAPI 3.1 (canónico).
 > 3. **[`plans/`](plans/)** — planes técnicos por feature (ej. [`savings-goals-plan.md`](plans/savings-goals-plan.md)).
-> 4. **[`openspec/changes/<id>/`](openspec/)** — artefactos por cambio (`proposal.md`, `design.md`, `specs/`, `tasks.md`).
-> 5. **[`openspec/specs/`](openspec/specs/)** — specs canónicos por capability (después de `/opsx:archive`).
-> 6. **[Página Notion del proyecto](https://www.notion.so/35d8c9b709f081c08d62f7257ce3db57)** — backlog dinámico (épicas, tareas, DoD).
-> 7. **[`CLAUDE.md`](CLAUDE.md)** — entrypoint para Claude Code con punteros a todo lo de arriba.
+> 4. **[`AGENTS.md`](AGENTS.md) + [`docs/uncle-bob/`](docs/uncle-bob/)** — el harness Uncle Bob (flujo actual): `feature_list.json` (backlog), `project-spec.md` / `features/` / `progress/` (artefactos vivos).
+> 5. **[Página Notion del proyecto](https://www.notion.so/35d8c9b709f081c08d62f7257ce3db57)** — backlog dinámico (épicas, tareas, DoD).
+> 6. **[`CLAUDE.md`](CLAUDE.md)** — entrypoint para Claude Code con punteros a todo lo de arriba.
 >
 > Documentos archivados en [`archive/`](archive/) son **históricos** — nunca autoritativos.
 >
@@ -29,20 +28,19 @@
 >
 > **Monolito modular por dominio.** Un solo deployable de Spring Boot. Paquetes por bounded context (`domain/transaction`, `domain/category`, `domain/merchant`, `domain/billing`, `domain/savings`, …), no por capas técnicas. Sin hexagonal puro, sin CQRS, sin microservicios, sin JPA, sin reactivo. Ver [`docs/base-standards.md §2`](docs/base-standards.md) y [`docs/backend-standards.md §2`](docs/backend-standards.md).
 >
-> **Excepción explícita — servicios de infraestructura (enmienda 2026-05-13):** la prohibición de microservicios aplica al *dominio de aplicación* (transactions, savings, billing, …). Procesos auxiliares de infraestructura — n8n (ingesta de correos), el sidecar `myfinance-backup-runner` (encripta y sube snapshots de Postgres), Traefik, Uptime Kuma — pueden vivir como servicios separados en su propia subcarpeta (`scripts/<dominio-infra>/`) porque no implementan reglas de negocio y su sustitución no afecta al Spring Boot app. Cada nuevo servicio de infraestructura requiere justificación explícita en el `design.md` del cambio que lo introduce. Esta enmienda formaliza la carve-out usada por [`openspec/changes/supabase-backup-policy`](openspec/changes/supabase-backup-policy/) (resuelve adversarial-review finding #2 del 2026-05-13, que correctamente señaló que el sidecar Node+Express necesita amendment, no auto-exención dentro del propio `design.md`).
+> **Excepción explícita — servicios de infraestructura (enmienda 2026-05-13):** la prohibición de microservicios aplica al *dominio de aplicación* (transactions, savings, billing, …). Procesos auxiliares de infraestructura — n8n (ingesta de correos), el sidecar `myfinance-backup-runner` (encripta y sube snapshots de Postgres), Traefik, Uptime Kuma — pueden vivir como servicios separados en su propia subcarpeta (`scripts/<dominio-infra>/`) porque no implementan reglas de negocio y su sustitución no afecta al Spring Boot app. Cada nuevo servicio de infraestructura requiere justificación explícita en el `design.md` del cambio que lo introduce. Esta enmienda formaliza la carve-out usada por [`archive/openspec-legacy/changes/supabase-backup-policy`](archive/openspec-legacy/changes/supabase-backup-policy/) (resuelve adversarial-review finding #2 del 2026-05-13, que correctamente señaló que el sidecar Node+Express necesita amendment, no auto-exención dentro del propio `design.md`).
 >
 > ### 🔁 Flujo de trabajo (por cambio)
 >
 > ```
-> /enrich-us  →  /opsx:propose  →  /opsx:apply  →  adversarial-review
->             →  /commit  →  /opsx:archive  →  /openspec-sync-specs  →  /update-docs
+> /enrich-us (opt.) → spec_partner → gherkin_author → ⏸ human gate → tdd_craftsman → judge → mutation_tester → done
 > ```
 >
-> Ver [`docs/base-standards.md §3`](docs/base-standards.md) y [`CLAUDE.md`](CLAUDE.md) para detalle.
+> Ver [`AGENTS.md`](AGENTS.md) y [`docs/uncle-bob/workflow.md`](docs/uncle-bob/workflow.md) para detalle.
 >
 > ### 🤖 Skills y agents
 >
-> User skills (`~/.claude/skills/`): `enrich-us` (project-overridden for Notion), `adversarial-review`, `code-auditing`, `commit`, `update-docs`, `writing-skills`, `openspec-sync-specs`, `show-spec-working`, `explain`, `meta-prompt`, `using-git-worktrees`, `sync-agent-symlinks` (upstream lidr-specboot) + OpenSpec built-ins.
+> User skills (`~/.claude/skills/`): `enrich-us` (project-overridden for Notion), `adversarial-review`, `code-auditing`, `commit`, `update-docs`, `writing-skills`, `show-spec-working`, `explain`, `meta-prompt`, `using-git-worktrees`, `sync-agent-symlinks` (upstream lidr-specboot).
 >
 > Agents proyecto ([`.claude/agents/`](.claude/agents/)): `backend-developer`, `frontend-developer` (placeholder), `product-strategy-analyst`, `adversarial-reviewer`, `code-auditor`.
 
@@ -140,12 +138,14 @@ myfinance-view/
 ├── frontend/                         ← Vacío, futuro React
 ├── docker/
 │   └── docker-compose.yml            ← Postgres local para desarrollo
-├── docs/                             ← Standards cross-cutting + api-spec.yml
-├── openspec/                         ← Spec-driven workflow
+├── docs/                             ← Standards cross-cutting + api-spec.yml + uncle-bob/ (harness docs)
+├── features/                         ← Contratos Gherkin (.feature) — harness Uncle Bob
+├── progress/                         ← Tracking por feature (current.md, historiales)
 ├── plans/                            ← Planes per-feature
-├── scripts/                          ← preflight.ps1, helpers
+├── scripts/                          ← init.ps1, helpers
+├── archive/                          ← Docs históricos incl. openspec-legacy/ (no autoritativos)
 ├── .claude/, .github/                ← Harness + CI
-└── SPEC.md, CLAUDE.md                ← Este archivo + entrypoint AI
+└── SPEC.md, CLAUDE.md, AGENTS.md, feature_list.json, init.ps1  ← Entrypoints
 ```
 
 ---
@@ -386,7 +386,7 @@ POST   /api/v1/feedback/transaction
 
 | Task | Descripción | Prioridad |
 |---|---|---|
-| ~~TASK-BE-01~~ ✓ | ~~Setup inicial: Spring Boot 25, jOOQ, Maven, Docker Compose~~ — Done 2026-05-13 (`openspec/changes/archive/2026-05-13-backend-scaffolding/`) | Alta |
+| ~~TASK-BE-01~~ ✓ | ~~Setup inicial: Spring Boot 25, jOOQ, Maven, Docker Compose~~ — Done 2026-05-13 (`archive/openspec-legacy/changes/archive/2026-05-13-backend-scaffolding/`) | Alta |
 | TASK-BE-02 | Configuración jOOQ: codegen desde schema `myfinance` de Supabase | Alta |
 | TASK-BE-03 | Spring Security: validación JWT de Supabase | Alta |
 | TASK-BE-04 | `GET /transactions` con filtros y paginación | Alta |
@@ -555,14 +555,14 @@ En este orden:
 
 1. **Ejecutar migraciones DB-01 a DB-05** — el schema debe estar completo antes de que jOOQ genere las clases
 2. **Traer y refinar la spec antigua** — alinearla con la Sección 5 de este documento
-3. ~~**TASK-BE-01**~~ ✓ — setup del proyecto Spring Boot con Java 25, jOOQ, Maven (done 2026-05-13, archivo `openspec/changes/archive/2026-05-13-backend-scaffolding/`)
+3. ~~**TASK-BE-01**~~ ✓ — setup del proyecto Spring Boot con Java 25, jOOQ, Maven (done 2026-05-13, archivo `archive/openspec-legacy/changes/archive/2026-05-13-backend-scaffolding/`)
 4. **TASK-DB-06 / flyway-migrations** (NUEVO — surfaced 2026-05-13) — adoptar Flyway desde el principio para gestión de migraciones, eliminando el orquestador manual `backend/database/init-db.sh` y separando definitivamente `backend/database/local/` (stubs) de `backend/database/migrations/` (baseline Flyway)
 5. ~~**monorepo-restructure**~~ ✓ — scaffold movido a `backend/` (done 2026-05-27, branch `refactor/monorepo-backend-move`)
 6. **TASK-BE-02** — configurar jOOQ codegen contra el schema `myfinance` ya migrado
 7. **TASK-BE-03** — Spring Security con JWT de Supabase
 8. Desde ahí, TDD endpoint por endpoint siguiendo el orden de la Sección 6
 
-**Operational gate aplicable a partir del paso 1:** todo write a Supabase remote (incluidos los Flyway migrate/baseline de TASK-DB-06) **debería** ir precedido por un snapshot fresco — daily reciente en `status/last-success.json` o pre-op tomado < 60 min antes — siguiendo el documented gate descrito en [`docs/development-guide.md §12 Backup & Disaster Recovery`](docs/development-guide.md#12-backup--disaster-recovery). La policy completa está en el cambio `openspec/changes/supabase-backup-policy/` (activo, branch `feat/supabase-backup-policy-replant`) y migra a `openspec/specs/database-backups/` tras `/opsx:archive`. Gate documentation-only — no hay enforcement automático.
+**Operational gate aplicable a partir del paso 1:** todo write a Supabase remote (incluidos los Flyway migrate/baseline de TASK-DB-06) **debería** ir precedido por un snapshot fresco — daily reciente en `status/last-success.json` o pre-op tomado < 60 min antes — siguiendo el documented gate descrito en [`docs/development-guide.md §12 Backup & Disaster Recovery`](docs/development-guide.md#12-backup--disaster-recovery). La policy completa está en `archive/openspec-legacy/changes/supabase-backup-policy/` (histórico) y en `archive/openspec-legacy/specs/database-backups/` (spec archivado). Gate documentation-only — no hay enforcement automático.
 
 ---
 

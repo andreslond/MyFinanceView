@@ -7,7 +7,7 @@
  * {@code @AuthenticationPrincipal UUID userId}. Validation rules (issuer, audience, ES256-only,
  * exp) are wired in {@link com.myfinanceview.config.SecurityConfig}.
  *
- * <p>See {@code openspec/changes/backend-mvp-readonly/design.md} D1 for the broader auth
+ * <p>See {@code archive/openspec-legacy/changes/archive/2026-06-08-backend-mvp-readonly/design.md} D1 for the broader auth
  * strategy.
  */
 package com.myfinanceview.auth;

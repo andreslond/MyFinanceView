@@ -20,7 +20,7 @@ Invoke the `session-handoff` skill and apply it now.
 2. Choose mode per the rules above (or per the skill's "When to use" section if ambiguous).
 3. Execute that mode end-to-end per the skill, including:
    - Real `git status` / `git log` / `git diff --stat` calls (never improvise state).
-   - If an OpenSpec change is active for this work, also update its `progress.md` per the skill's Step 4.
+   - If a harness feature is active for this work, also update `progress/current.md` + `feature_list.json` per the skill's Step 4.
 4. Report back per the skill's Step 5 (PRODUCE) or post the ≤120-word resume summary and stop (RESUME).
 
 Do not commit the handoff automatically — leave staging/commit to the user (or to a follow-up `/commit`).

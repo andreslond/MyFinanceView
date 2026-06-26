@@ -7,7 +7,7 @@
 -- Adds `display_name` to `myfinance.categories` and backfills the 19 system
 -- categories (user_id IS NULL) with their canonical Spanish labels.
 --
--- See openspec/changes/backend-mvp-readonly/design.md §D8 and SPEC.md §4.
+-- See archive/openspec-legacy/changes/archive/2026-06-08-backend-mvp-readonly/design.md §D8 and SPEC.md §4.
 --
 -- Mapping rationale: V003 seeded the system categories using English labels
 -- in the `name` column (e.g. `'Dining Out'`, not `'restaurants_and_cafes'`).

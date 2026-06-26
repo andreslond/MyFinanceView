@@ -5,8 +5,8 @@ info:
   description: |
     REST API for MyFinanceView — personal finance backend.
 
-    **Status:** MVP read-only surface (4 endpoints) per OpenSpec change
-    `backend-mvp-readonly`. Adds GET transactions/accounts/categories and PATCH
+    **Status:** MVP read-only surface (4 endpoints); feature `backend-mvp-readonly`
+    tracked in `feature_list.json`. Adds GET transactions/accounts/categories and PATCH
     transactions/{id}/category. All endpoints require
     `Authorization: Bearer {Supabase JWT (ES256)}` unless explicitly marked
     public. Errors follow RFC 7807 (`application/problem+json`) and SHALL NOT
@@ -14,8 +14,8 @@ info:
     schema internals.
 
     Future endpoints (transactions/{id}, /transactions/pending-review, /accounts/{id}/billing-summary,
-    /merchants*, /feedback/transaction, /savings-goals*) land in their own
-    OpenSpec changes.
+    /merchants*, /feedback/transaction, /savings-goals*) are tracked as pending features
+    in `feature_list.json`.
 
 servers:
   - url: http://localhost:8080

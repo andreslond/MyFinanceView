@@ -9,8 +9,6 @@
 - **JDK 25** (OpenJDK or Temurin). Verify: `java --version`.
 - **Maven 3.9+**. Verify: `mvn --version`.
 - **Docker Desktop** (or compatible) for local Postgres + Testcontainers.
-- **Node.js 20.19+** for OpenSpec CLI. Verify: `node --version`.
-- **OpenSpec CLI**: `npm install -g @fission-ai/openspec@latest`.
 - **Git** with the project's `.gitconfig` user set.
 - (Recommended) **IntelliJ IDEA Ultimate** for jOOQ and Spring Boot tooling.
 
@@ -120,34 +118,28 @@ Testcontainers spins up a real Postgres 17 with the same schema for each test cl
 
 ## 8. Spec-Driven Workflow
 
-Per change, follow [base-standards.md §3](base-standards.md):
+For **domain work** (`domain/**`), use the Uncle Bob harness. See [AGENTS.md](../AGENTS.md) (nav map) and [docs/uncle-bob/workflow.md](uncle-bob/workflow.md) for the full pipeline. Quick summary:
 
 ```bash
-# 1. Refine the user story (Notion URL or paste)
+# 1. Refine the story (optional)
 /enrich-us {notion-url or text}
 
-# 2. Propose: generates openspec/changes/<id>/{proposal,design,specs,tasks}.md
-/opsx:propose "GET /accounts endpoint"
+# 2. Harness pipeline — run as craftsman_lead, spawn subagents:
+#    spec_partner  → project-spec.md
+#    gherkin_author → features/<name>.feature
+#    ⏸ approve .feature in chat
+#    tdd_craftsman → RED/GREEN/REFACTOR
+#    judge         → APPROVED or REJECTED
+#    mutation_tester → PIT 100%
 
-# 3. Implement, TDD per task in tasks.md
-/opsx:apply
-
-# 4. Adversarial review
-# Either skill: /adversarial-review
-# Or subagent: Agent(subagent_type: "adversarial-reviewer", ...)
-
-# 5. Commit + PR
+# 3. Commit + PR
 /commit
 
-# 6. Archive the change
-/opsx:archive
-
-# 7. Sync delta specs into canonical specs
-/openspec-sync-specs
-
-# 8. Sync docs
+# 4. Sync docs
 /update-docs
 ```
+
+For **non-domain work** (controllers, jOOQ repos, migrations, infra, auth), use `backend-developer` directly — no harness pipeline.
 
 ## 9. Branching & Commits
 
@@ -197,7 +189,7 @@ The `-v` flag drops volumes; migrations in `backend/database/migrations/` re-run
 
 ## 12. Backup & Disaster Recovery
 
-Source of truth: [`openspec/specs/database-backups/spec.md`](../openspec/specs/database-backups/spec.md) (populated after `/opsx:archive` of the `supabase-backup-policy` change); operator runbook lives at [`scripts/backup/README.md`](../scripts/backup/README.md).
+Source of truth: [`archive/openspec-legacy/specs/database-backups/spec.md`](../archive/openspec-legacy/specs/database-backups/spec.md) (archived spec, historical); operator runbook lives at [`scripts/backup/README.md`](../scripts/backup/README.md).
 
 ### 12.1 Daily cadence
 
@@ -228,7 +220,7 @@ This expectation covers:
 - MCP `apply_migration` and MCP `execute_sql` against the MyFinanceView project.
 - Any ad-hoc shell script that opens a connection with write privileges.
 
-**The gate is documentation-only.** There is no CI check, no runtime hook, no MCP-side enforcement — the rule is honoured by operator discipline, by the `/opsx:apply` task-0 checklist (`openspec/templates/supabase-write-checklist.md`), and by the `adversarial-review` skill flagging missing snapshot evidence on a change proposal. The earlier draft of this section labelled the rule "BREAKING — process only"; that wording overclaimed and has been removed (B6 fix in the `supabase-backup-policy` design.md).
+**The gate is documentation-only.** There is no CI check, no runtime hook, no MCP-side enforcement — the rule is honoured by operator discipline and by the `adversarial-review` skill flagging missing snapshot evidence on a change proposal. The earlier draft of this section labelled the rule "BREAKING — process only"; that wording overclaimed and has been removed (B6 fix in the `supabase-backup-policy` design.md).
 
 ### 12.3 Pre-op procedure
 

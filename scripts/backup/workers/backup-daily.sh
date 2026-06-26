@@ -264,7 +264,7 @@ STATUS_LOG_LINE="$(date -u +%Y-%m-%dT%H:%M:%SZ) daily SUCCESS sha256=${LOCAL_SHA
 # Uptime Kuma success push removed together with the in-cluster dead-man-switch.
 # Failure detection now relies on dispatch_alert reaching ntfy or Resend; the
 # operator's external uptime monitor on n8n.datachefnow.com covers the
-# host-down case. See openspec/changes/supabase-backup-policy/design.md
+# host-down case. See archive/openspec-legacy/changes/archive/2026-06-08-supabase-backup-policy/design.md
 # Decision 7. Re-introduce here if a bounded follow-up reinstates Kuma or
 # healthchecks.io.
 # ---------------------------------------------------------------------------

@@ -123,7 +123,7 @@ Empty. RLS: read = all authenticated; write = service role.
 >
 > Order matters. FK dependencies force this sequence.
 >
-> **Pre-flight expectation (operator discipline, documentation-only gate):** before applying any migration in this section to the Supabase remote, the operator **should** verify either a daily snapshot < 24 h old or run `MyFinanceBackup-PreOp` from the n8n UI within the last 60 minutes. Full procedure and rationale at [`docs/development-guide.md §12 Backup & Disaster Recovery`](development-guide.md#12-backup--disaster-recovery); spec source at `openspec/changes/supabase-backup-policy/` (migrates to `openspec/specs/database-backups/` after archive). No CI / runtime enforcement — relies on operator + the `adversarial-review` skill flagging missing snapshot evidence on change proposals.
+> **Pre-flight expectation (operator discipline, documentation-only gate):** before applying any migration in this section to the Supabase remote, the operator **should** verify either a daily snapshot < 24 h old or run `MyFinanceBackup-PreOp` from the n8n UI within the last 60 minutes. Full procedure and rationale at [`docs/development-guide.md §12 Backup & Disaster Recovery`](development-guide.md#12-backup--disaster-recovery); spec source archived at `archive/openspec-legacy/specs/database-backups/spec.md` (historical). No CI / runtime enforcement — relies on operator + the `adversarial-review` skill flagging missing snapshot evidence on change proposals.
 
 ### V004 — TASK-DB-01: categories.display_name (ES) — owned by `backend-mvp-readonly`
 ```sql

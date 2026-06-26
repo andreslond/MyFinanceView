@@ -135,6 +135,6 @@ current repo's root (or worktree root if inside a worktree).
 - **Opt-out for local-only handoffs:** add `.handoffs/` to that
   project's `.gitignore`.
 
-For projects that use OpenSpec changes, the skill ALSO updates the
-relevant `openspec/changes/<id>/progress.md` per the project's progress
-template — see the skill's "Step 4" for the rule.
+For projects that use the Uncle Bob harness, the skill ALSO updates
+`progress/current.md` + `feature_list.json` per the harness progress
+schema — see the skill's "Step 4" for the rule.
