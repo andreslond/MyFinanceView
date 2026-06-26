@@ -37,3 +37,24 @@
 **Resultado mutation_tester:** PASS — **100%** (11/11 mutantes muertos, test strength 100%, 0 sobrevivientes). Ver `progress/mutation_billing_period_resolution.md`.
 **Fix de entorno:** se desbloqueó el codegen jOOQ (Postgres en Docker) y se bumpeó `pitest-maven` 1.17.4 → **1.25.5** + `pitest-junit5-plugin` 1.2.1 → 1.2.3 (ASM 9.8, soporta bytecode JDK 25). Primera corrida real de PIT en el proyecto.
 **Status final:** `done`.
+
+---
+
+## 2026-06-26 — transaction_categorization_rules (#2) — DONE
+
+**Qué se hizo:**
+- Pipeline completo conversación → Gherkin → TDD → judge → mutación sobre
+  `domain/category`. 11 decisiones cerradas en `project-spec.md`; 21 escenarios
+  `@s1..@s21` (puerta humana aprobada por el operador). Auditoría del lead: sin bugs;
+  literales de `TransactionKind` verificados contra el enum DB `transaction_type` (V001).
+- Producción pura (sealed `CategoryMatch` + `Matched`/`NoMatch`, `CategoryRef`,
+  `CategorizableTransaction`, `CategoryRule`, `TransactionKind` enum,
+  `InvalidRuleException`, `TransactionCategorizer` estático). Semántica AND de predicados;
+  `contains` case-insensitive; rango de monto inclusive con `compareTo`; conflicto de
+  categorías → `NoMatch` (anti-adivinanza); catch-all / patrón blank / min>max →
+  `InvalidRuleException`.
+
+**Resultado suite:** GREEN (tests puros). `init.ps1` sin `[FAIL]`.
+**Judge:** APPROVED (a la primera; re-review tras mutation-hardening también APPROVED).
+**Resultado mutation_tester:** primera corrida 88% (8 sobrevivientes en ramas single-predicate / null-kinds) → tdd_craftsman añadió tests de endurecimiento → **PASS 100% (66/66)**, test strength 100%.
+**Status final:** `done`.

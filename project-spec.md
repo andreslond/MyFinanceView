@@ -336,3 +336,377 @@ necesita inyectar la lógica como `@Bean`, envuelve la clase estática sin modif
 **Alternativa descartada:** método de instancia — permitiría inyección Spring, pero el dominio
 puro no debe depender del framework; el mocking de un método puro no aporta valor de test
 y el proyecto rechaza mocks innecesarios (`docs/base-standards.md §5`).
+
+---
+
+### transaction_categorization_rules — #2
+
+#### Propósito
+
+Camino rápido y **determinista** de categorización previo al LLM: dado un movimiento
+normalizado (descriptor, monto, tipo de transacción) y una lista de reglas de dominio,
+asigna una categoría del catálogo de forma pura e idempotente.
+
+Implementa la rama "fast path" del flujo de `SPEC.md §7`: cuando un merchant tiene
+`confidence >= 0.85`, la categoría se asigna directamente sin llamar al LLM. Este dominio
+encapsula la lógica de esa evaluación. Lo que ninguna regla resuelve — o lo que produce
+ambigüedad entre categorías distintas — devuelve `NoMatch` explícito para que el LLM
+decida; **nunca se adivina una categoría por defecto en silencio** (regla anti-adivinanza,
+`docs/uncle-bob/architecture.md §Reglas de frontera §4`).
+
+**Paquete destino:** `com.myfinanceview.domain.category`
+(conforme a `docs/uncle-bob/architecture.md §Estructura objetivo`).
+
+Sin IO, sin reloj, sin Spring, sin jOOQ. Los datos del movimiento y las reglas entran
+íntegramente como parámetros.
+
+---
+
+#### Comportamiento
+
+**Firma de entrada:** `categorize(transaction: CategorizableTransaction, rules: List<CategoryRule>) → CategoryMatch`
+
+**Algoritmo de evaluación de una sola regla:**
+
+Una `CategoryRule` coincide (_matches_) con un `CategorizableTransaction` si y solo si
+**todos** sus predicados no-nulos/no-vacíos son verdaderos de forma simultánea (semántica
+AND). Los predicados ausentes (null / colección vacía) no se evalúan: no suponen restricción.
+
+| Predicado de la regla | Evaluación |
+|---|---|
+| `merchantPattern` (no null) | `descriptor.toLowerCase().contains(merchantPattern.toLowerCase())` |
+| `minAmount` (no null) | `amount.compareTo(minAmount) >= 0` |
+| `maxAmount` (no null) | `amount.compareTo(maxAmount) <= 0` |
+| `transactionKinds` (no vacío) | `transactionKinds.contains(transaction.type())` |
+
+**Determinación del resultado** a partir del conjunto de reglas que coinciden:
+
+| Reglas que coinciden | Resultado |
+|---|---|
+| Ninguna | `NoMatch` |
+| Una o más, **todas** apuntan a la misma categoría (mismo `CategoryRef.id()`) | `Matched(categoryRef)` |
+| Dos o más, apuntan a **categorías distintas** | `NoMatch` (ambigüedad — anti-adivinanza) |
+
+La coincidencia en categoría se determina por `UUID id`, no por `name`. Si dos reglas
+apuntan al mismo UUID, se consideran coincidentes en categoría aunque los objetos
+`CategoryRef` difieran en otro campo.
+
+**Sin estado mutable, sin IO, sin reloj.** El resultado sobre el mismo par
+`(transaction, rules)` es siempre idéntico: determinista e idempotente.
+
+---
+
+#### Contrato Java
+
+```java
+// ── Enum de dominio: tipos de transacción ──────────────────────────────────────
+// Espejo puro de transaction_type (DB enum). La capa de servicio convierte del
+// tipo jOOQ generado a este enum; el dominio no importa nada de jOOQ.
+public enum TransactionKind {
+    CREDIT_CARD_PURCHASE,
+    DEBIT_PURCHASE,
+    CREDIT_CARD_PAYMENT,
+    INCOMING_TRANSFER,
+    OUTGOING_TRANSFER,
+    INCOMING_PAYMENT
+}
+
+// ── Input mínimo del movimiento para categorización ───────────────────────────
+// El caller normaliza los campos del movimiento antes de invocar el dominio.
+// La conversión de occurred_at (OffsetDateTime UTC) a localDate en
+// America/Bogota, y de transaction_type (jOOQ) a TransactionKind, son
+// responsabilidad de la capa de servicio.
+public record CategorizableTransaction(
+    String descriptor,        // texto crudo del banco; no null, no blank
+    BigDecimal amount,        // monto ≥ 0, BigDecimal escala 2; no null
+    TransactionKind type,     // tipo de la transacción; no null
+    String currency           // ISO 4217, ej. "COP"; no null
+) {}
+
+// ── Referencia estable a una categoría del catálogo ───────────────────────────
+// id  : categories.id (UUID, clave primaria, estable)
+// name: categories.name (clave inglesa, ej. "Dining Out"; no el display_name ES)
+// El nombre en español (display_name) es responsabilidad de la capa de presentación.
+public record CategoryRef(UUID id, String name) {}
+
+// ── Regla de categorización determinista ──────────────────────────────────────
+// Predicados null/vacío = sin restricción en esa dimensión.
+// Al menos un predicado debe ser no-nulo/no-vacío; merchantPattern != null implica no-blank.
+public record CategoryRule(
+    UUID id,                               // ID estable de la regla (trazabilidad)
+    String merchantPattern,               // null → sin restricción de descriptor; si no null, debe ser no-blank
+    BigDecimal minAmount,                  // null → sin cota inferior de monto
+    BigDecimal maxAmount,                  // null → sin cota superior de monto
+    java.util.Set<TransactionKind> transactionKinds, // vacío → cualquier tipo
+    CategoryRef category                   // no null; categoría a asignar si coincide
+) {
+    // Invariante de construcción (a verificar por el tdd_craftsman):
+    // – Al menos un predicado debe ser no-nulo/no-blank/no-vacío.
+    // – Si merchantPattern != null, debe ser no-blank.
+    // Estas condiciones se lanzan como InvalidRuleException en tiempo de evaluación.
+}
+
+// ── Resultado sellado — type-safe, sin null oculto ─────────────────────────────
+public sealed interface CategoryMatch permits Matched, NoMatch {}
+
+public record Matched(CategoryRef category) implements CategoryMatch {}
+
+public record NoMatch() implements CategoryMatch {}
+
+// ── Clase resolutora — sin estado, método estático puro ───────────────────────
+public final class TransactionCategorizer {
+
+    private TransactionCategorizer() {}
+
+    /**
+     * Applies {@code rules} to {@code transaction} and returns the deterministic
+     * category match.
+     *
+     * <ul>
+     *   <li>Empty rules or no rule matches → {@link NoMatch}</li>
+     *   <li>One or more rules match, all pointing to the same category → {@link Matched}</li>
+     *   <li>Two or more rules match pointing to different categories → {@link NoMatch}
+     *       (ambiguity — anti-guess principle)</li>
+     * </ul>
+     *
+     * @param transaction normalised transaction data; not null, descriptor not blank,
+     *                    amount ≥ 0
+     * @param rules       ordered list of categorisation rules; may be empty (→ NoMatch)
+     * @throws InvalidTransactionDescriptorException if descriptor is null or blank
+     * @throws InvalidRuleException if a rule has no predicates, or merchantPattern is non-null but blank
+     */
+    public static CategoryMatch categorize(
+        CategorizableTransaction transaction,
+        java.util.List<CategoryRule> rules
+    ) {
+        // implementation by tdd_craftsman
+    }
+}
+```
+
+**Parámetros:**
+
+| Parámetro | Tipo | Restricciones |
+|---|---|---|
+| `transaction` | `CategorizableTransaction` | no null; `descriptor` no blank; `amount >= 0` |
+| `rules` | `List<CategoryRule>` | no null; puede ser vacía → `NoMatch`; no puede contener elementos null |
+
+**Retorno:** `CategoryMatch` — nunca null; siempre `Matched` o `NoMatch`.
+
+**Nombre del método:** `categorize` — verbo directo, sin redundancia con el nombre de la
+clase (`TransactionCategorizer.categorize`). Coincide con la acceptance criteria de
+`feature_list.json` (#2): `categorize(transaction, rules)`.
+
+---
+
+#### Errores
+
+| Condición | Excepción | Mensaje mínimo |
+|---|---|---|
+| `transaction == null` | `NullPointerException` (JDK) | n/a — la capa llamante garantiza no-null |
+| `transaction.descriptor()` null o blank | `InvalidTransactionDescriptorException extends DomainException` | `"Transaction descriptor must not be blank."` |
+| `transaction.amount()` null | `NullPointerException` (JDK) | n/a |
+| `transaction.amount()` negativo | `InvalidTransactionAmountException extends DomainException` | `"Transaction amount must be >= 0, got: N."` |
+| `rules == null` | `NullPointerException` (JDK) | n/a |
+| `rules` contiene elemento null | `NullPointerException` (JDK) | n/a — contrato por defecto de List |
+| Regla sin ningún predicado (catch-all total) | `InvalidRuleException extends DomainException` | `"Rule <id> has no predicates — at least one predicate is required."` |
+| `minAmount > maxAmount` en una regla | `InvalidRuleException extends DomainException` | `"Rule <id>: minAmount must be <= maxAmount."` |
+
+`DomainException` ya existe en `com.myfinanceview.domain.DomainException`.
+Los nombres de excepción siguen el patrón `Invalid<Contexto>Exception` de
+`docs/uncle-bob/conventions.md §Errores`.
+
+---
+
+#### Casos límite
+
+| Caso | Resultado esperado |
+|---|---|
+| Lista de reglas vacía | `NoMatch` |
+| Ninguna regla coincide con el movimiento | `NoMatch` |
+| Una sola regla coincide | `Matched(categoryRef)` |
+| Varias reglas coinciden, todas apuntan a la misma categoría (mismo UUID) | `Matched(categoryRef)` |
+| Varias reglas coinciden con categorías distintas (distintos UUIDs) | `NoMatch` (ambigüedad) |
+| `descriptor` contiene espacios al inicio/final | Se evalúa el valor raw (el caller decide si normalizar antes); `InvalidTransactionDescriptorException` si solo whitespace |
+| `amount == 0` | Válido (ej. devolución total); no lanza excepción |
+| `merchantPattern` coincide como substring case-insensitive | Solo si el descriptor contiene el patrón (evaluación: `descriptor.toLowerCase().contains(pattern.toLowerCase())`) |
+| `minAmount == maxAmount` (restricción puntual) | Válido; solo coincide con monto exacto |
+| Regla con solo `minAmount` (sin `maxAmount`) | Válido; coincide con todo monto >= minAmount |
+| `transactionKinds` vacío en la regla | Sin restricción de tipo → no filtra por tipo |
+| `transactionKinds` null en la regla | Tratado igual que vacío (sin restricción de tipo) |
+| Mismo movimiento evaluado dos veces con las mismas reglas | Resultado idéntico (idempotencia) |
+
+---
+
+#### Decisiones
+
+##### CLOSED — Tipo de retorno: `sealed interface CategoryMatch permits Matched, NoMatch`
+
+Establecido por la acceptance criteria: `categorize(transaction, rules) -> CategoryMatch
+(categoría conocida o NO_MATCH explícito)`. La forma `sealed interface` con `record Matched`
+y `record NoMatch` es type-safe, fuerza al consumidor a tratar ambos casos en un `switch`,
+y sigue la convención de `docs/uncle-bob/conventions.md §Java` ("Usa `sealed interface /
+enum` para uniones cerradas"). No hay null oculto ni `Optional` anidado.
+
+**Alternativa descartada:** `record CategoryMatch(@Nullable CategoryRef category)` — un campo
+nullable rompe el type-safety y permite que el llamante ignore el caso NoMatch sin
+compilar en error. Violación del anti-adivinanza.
+
+---
+
+##### CLOSED — Anti-adivinanza: ausencia de regla devuelve `NoMatch`, sin fallback
+
+Ninguna categoría "Miscellaneous" o "Sin categoría" se asigna silenciosamente cuando
+ninguna regla coincide. El dominio devuelve `NoMatch` y la capa de servicio decide el
+siguiente paso (llamar al LLM, encolar para revisión, etc.). Establecido explícitamente
+por la acceptance criteria.
+
+**Alternativa descartada:** devolver una categoría "Other" por defecto — oculta errores de
+configuración (reglas mal formuladas), viola la regla anti-adivinanza del proyecto
+(`docs/uncle-bob/architecture.md §4`) y produce datos incorrectos sin trazabilidad.
+
+---
+
+##### CLOSED — Categorías referenciadas por `CategoryRef(UUID id, String name)` del catálogo
+
+El `name` de la referencia es `categories.name` (etiqueta inglesa del catálogo: "Dining
+Out", "Groceries", etc.), **no** un string inventado ni `display_name` en español. El UUID
+es `categories.id` (clave primaria, FK estable). Ambos campos provienen de la regla
+que ya los tenía resueltos desde la DB (vía la capa de servicio); el dominio no los
+inventa ni los busca.
+
+**Razón del campo `name`:** la acceptance criteria fija explícitamente que "las categorías
+referencian el catálogo del proyecto (name en inglés)". Incluir también el UUID permite
+a la capa de servicio escribir directamente `category_id` a la DB sin una segunda consulta.
+El `display_name` en español es responsabilidad de la capa de presentación, fuera del dominio.
+
+**Alternativa descartada:** solo UUID — opaco en el dominio, dificulta la trazabilidad en
+tests y logs. Alternativa `solo name` — requiere lookup adicional de UUID al persistir.
+
+---
+
+##### CLOSED — Sin IO, sin reloj, sin estado mutable
+
+`TransactionCategorizer` es `final` con constructor privado y método `public static`.
+Idéntica estructura a `BillingPeriodResolver` (#1), que ya es la referencia de estilo del
+proyecto. Sin `@Service`, sin `@Component`, sin `Instant.now()`.
+
+**Alternativa descartada:** clase con estado (lista de reglas inyectada en constructor) —
+añadiría statefulness innecesario; cada llamada recibe sus propias reglas por parámetro,
+lo que es más flexible y más fácil de testear.
+
+---
+
+##### CLOSED — Dinero: `BigDecimal` con `RoundingMode.HALF_EVEN` en comparaciones
+
+Los predicados de monto usan `compareTo`, **nunca** `equals` (`BigDecimal.equals` incluye
+la escala en la comparación). Escala 2 heredada de la DB (`numeric(18,2)`). Regla dura del
+proyecto (`docs/base-standards.md §4`, `docs/uncle-bob/conventions.md §Dinero`).
+
+---
+
+##### CLOSED — `TransactionKind`: enum de dominio puro, desacoplado de jOOQ
+
+El dominio no puede importar el tipo jOOQ generado (`org.jooq.*` prohibido en `domain/**`
+por `docs/uncle-bob/architecture.md §Reglas de frontera §1`). Se define `enum
+TransactionKind` en `domain/category/` con los mismos literales que el DB enum
+`transaction_type` (V001). La capa de servicio mapea jOOQ → dominio antes de llamar.
+Cuando feature #3 (`merchant_matching`) necesite el mismo enum, el `tdd_craftsman` de esa
+feature puede elevarlo a un paquete compartido (decisión YAGNI-safe: no pre-anticipar hoy).
+
+**Alternativa descartada:** `String type` — pierde seguridad de tipos en tiempo de
+compilación; permite que valores inválidos entren al dominio sin ser detectados.
+
+---
+
+##### CLOSED — Semántica de `merchantPattern`: `contains` case-insensitive
+
+El patrón coincide si y solo si `descriptor.toLowerCase().contains(merchantPattern.toLowerCase())`.
+La evaluación es puramente booleana: no hay wildcards, no hay compilación de expresiones
+regulares, no puede lanzar `PatternSyntaxException`.
+
+**Razón:** es el mínimo suficiente para los descriptores reales de Davivienda/Bancolombia
+(BOLD, RAPPI, DIDI, UBER). No requiere parser, es trivial de testear, y se demuestra
+determinista sin condiciones especiales. Un patrón tipo `"RAPPI"` ya coincide con el
+descriptor real `"RAPPI COLOMBIA S.A.S"` sin necesidad de wildcards. Si en el futuro se
+necesita glob o regex, se extiende el predicado sin cambiar la firma del método.
+
+**Alternativa descartada:** glob (`*`, `?`) y regex — más expresivos pero requieren un
+parser o `Pattern.compile`, lo que introduce errores en tiempo de ejecución con patrones
+malformados y complejidad de validación extra; descartados por YAGNI.
+
+---
+
+##### CLOSED — Precedencia cuando varias reglas coinciden: ambigüedad → `NoMatch`
+
+Cuando dos o más reglas coinciden con el mismo movimiento y apuntan a **categorías
+distintas** (distintos `CategoryRef.id()` UUID), el resultado es `NoMatch` explícito.
+Para que el resultado sea `Matched`, todas las reglas que coinciden deben apuntar al mismo
+UUID de categoría. No existe first-match-wins ni regla catch-all implícita.
+
+**Razón:** la acceptance criteria distingue explícitamente "Ambigüedad → NoMatch" de
+"ausencia de regla → NoMatch": son dos causas distintas del mismo resultado. Un conflicto
+de reglas es información de configuración incorrecta o de genuina ambigüedad de negocio;
+rutarlo al LLM (la siguiente etapa del pipeline de `SPEC.md §7`) es la respuesta correcta.
+El principio anti-adivinanza (`docs/uncle-bob/architecture.md §Reglas de frontera §4`)
+prohíbe cualquier fallback silencioso cuando el resultado no está unívocamente determinado.
+Consecuencia directa: una regla sin predicados (catch-all total) es inválida (ver decisión
+sobre OQ-4 abajo).
+
+**Alternativa descartada:** first-match wins — el orden de las reglas se convierte en un
+parámetro implícito de la lógica; un cambio accidental de orden produce categorías
+diferentes sin que el dominio lo detecte. Permite defaults silenciosos, violando
+anti-adivinanza.
+
+---
+
+##### CLOSED — Campo `currency` en `CategorizableTransaction`: incluido
+
+El record `CategorizableTransaction` incluye `String currency` (ISO 4217, ej. `"COP"`).
+
+**Razón:** el campo `currency` ya existe en `transactions.currency` (DB); el caller lo pasa
+sin costo extra. Una regla de monto sin moneda podría comparar incorrectamente $20,000 COP
+con $10 USD; incluir la moneda desde el principio previene esa clase de bug sin ningún
+overhead de implementación real. Las reglas del dominio pueden ignorar el campo si el
+predicado no lo evalúa.
+
+**Alternativa descartada:** omitir `currency` — el proyecto opera principalmente en COP
+hoy, pero la simplificación crea un punto de fallo silencioso para transacciones en USD
+(tarjetas internacionales) y obligaría a una firma breaking-change en el futuro.
+
+---
+
+##### CLOSED — Regla sin ningún predicado: inválida → `InvalidRuleException`
+
+Una `CategoryRule` en la que todos los predicados son nulos/vacíos
+(`merchantPattern = null`, `minAmount = null`, `maxAmount = null`,
+`transactionKinds = vacío/null`) es rechazada por el dominio con
+`InvalidRuleException extends DomainException` en el momento de la evaluación.
+
+**Razón:** una regla sin predicados coincide con cualquier movimiento; es un catch-all
+implícito disfrazado de regla de negocio. Bajo la decisión de ambigüedad → NoMatch (OQ-2),
+una catch-all al final de la lista siempre crearía conflicto con cualquier regla específica
+que también coincida, haciendo el sistema inoperable. El dominio detecta el error en
+validación temprana y lanza una excepción visible, conforme al principio anti-adivinanza.
+
+**Alternativa descartada:** tratar la catch-all como válida — permite que errores de
+configuración pasen silenciosamente al dominio; incompatible con la decisión OQ-2 (ambigüedad
+→ NoMatch).
+
+---
+
+##### CLOSED — `merchantPattern` vacío o blank: inválido → `InvalidRuleException`
+
+Si `merchantPattern != null`, debe ser una cadena no-blank. Un patrón `""` (vacío) o solo
+espacios en blanco siempre retorna `true` en `contains`, lo que lo convierte en catch-all
+de descriptor. El dominio lanza `InvalidRuleException` con mensaje:
+`"Rule <id>: merchantPattern must not be blank when non-null."`.
+
+**Razón:** `merchantPattern = ""` es funcionalmente equivalente a ausencia del predicado de
+descriptor, pero enmascarado — viola el mismo principio que OQ-4 (anti-adivinanza). Fallar
+rápido con un mensaje claro es más honesto que tratar `""` como `null` en silencio.
+
+**Alternativa descartada:** tratar `""` como `null` (sin restricción) — comportamiento
+liberal que oculta errores de datos de la DB (un patrón vacío que llegó de un INSERT
+incorrecto); introduce divergencia entre `null` y `""` semánticamente equivalentes pero
+tratados de forma diferente en validación posterior.
