@@ -30,7 +30,7 @@ A **session handoff** is a short, structured note that lets the next session pic
 
 - Trivial Q&A sessions (no edits, no decisions) — no handoff needed.
 - Work that's already complete and committed — the commit message + PR description IS the handoff.
-- Work tracked in an active OpenSpec change with a healthy `progress.md` — **update `progress.md` instead** (project's canonical resume mechanism per `CLAUDE.md`). The handoff note is for work *outside* the OpenSpec flow (exploration, infra fixes, scratch sessions) OR a complement when the OpenSpec session also had non-spec scratch work.
+- Work tracked as an active harness feature with a healthy `progress/current.md` — **update `progress/current.md` and `feature_list.json` instead** (the project's canonical resume mechanism per `CLAUDE.md`). The handoff note is for work *outside* the harness pipeline (exploration, infra fixes, scratch sessions) OR a complement when the harness session also had non-pipeline scratch work.
 
 ## Output location
 
@@ -112,14 +112,15 @@ mode: in-flight | paused | blocked
 | **Non-obvious context** | If it's in the diff or in a commit message, it does NOT belong here. Only what would be LOST. |
 | **Length** | Whole document under 60 lines. Trim aggressively. A handoff that takes longer to read than to write is broken. |
 
-### Step 4: if working on an OpenSpec change, also update `progress.md`
+### Step 4: if working on a harness feature, also update `progress/current.md`
 
-If `openspec/changes/<id>/progress.md` exists and matches this session's work:
+If `progress/current.md` exists and matches this session's work:
 
-1. Refresh `current_task`, `last_completed`, `next_step`, `last_updated` per `openspec/templates/progress-template.md`.
-2. Reference the handoff in `next_step` if it carries detail that doesn't fit the schema: `next_step: "see .handoffs/2026-06-02-2145-jwt-auth.md"`.
+1. Refresh the feature's status, `last_completed`, `next_step`, `last_updated`.
+2. Update `feature_list.json` if the feature phase changed (e.g. `in_progress` → `done`).
+3. Reference the handoff in `next_step` if it carries detail that doesn't fit the schema: `next_step: "see .handoffs/2026-06-02-2145-jwt-auth.md"`.
 
-The handoff and `progress.md` are complementary: `progress.md` is the structured pointer the OpenSpec workflow reads; the handoff is the prose with the non-obvious context.
+The handoff and `progress/current.md` are complementary: `progress/current.md` is the structured pointer the harness reads; the handoff is the prose with the non-obvious context.
 
 ### Step 5: report back
 
@@ -173,7 +174,7 @@ If state drifted significantly, say so explicitly and ask whether to update the 
 | Paraphrased git state | If wrong, agent acts on wrong tree → silent damage | Copy `git status` output literally; do not interpret |
 | Missing **Non-obvious context** | Tomorrow-you forgets the gotcha and rediscovers it the hard way | Always include even if it feels trivial; if truly empty, write `- none` |
 | Saving outside `.handoffs/` (project root, `docs/`, etc.) | RESUME mode won't find it | Always `.handoffs/<timestamp>-<slug>.md` |
-| Skipping `progress.md` when in an OpenSpec change | Splits the source of truth | Update both; cross-link via `next_step` |
+| Skipping `progress/current.md` when in a harness feature | Splits the source of truth | Update both; cross-link via `next_step` |
 | RESUME without verifying drift | Acts on a stale snapshot, breaks user's WIP | Always run `git status` and reconcile before recommending anything |
 | Producing a handoff from a worktree but writing into the main checkout | Handoff doesn't travel with the branch; other devices won't see it on pull | Always write `.handoffs/` relative to current cwd, which is the worktree root |
 
@@ -198,5 +199,5 @@ If in RESUME mode:
 | Find latest handoff | `Get-ChildItem .handoffs -Filter *.md \| Sort-Object LastWriteTime -Descending \| Select-Object -First 1` |
 | Read schema | This SKILL.md, "Step 2: write the document using this schema" |
 | Write a handoff | Use the Write tool to `.handoffs/<YYYY-MM-DD-HHMM>-<slug>.md` |
-| Sync OpenSpec progress | Update `openspec/changes/<id>/progress.md` per its template |
+| Sync harness progress | Update `progress/current.md` + `feature_list.json` per the harness schema |
 | Verify state on resume | `git status --short && git log --oneline -10` |

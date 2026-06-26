@@ -13,19 +13,19 @@ Key facts (v1, operator decision 2026-06-01):
 - Alerts via **ntfy.sh push + Resend transactional email** (`alerts@datachefnow.com` on the verified `datachefnow.com` domain) in parallel on any failure.
 - **No in-cluster dead-man-switch in v1** (Uptime Kuma deferred); host-down detection relies on the operator's external uptime monitor on `n8n.datachefnow.com`.
 
-For the authoritative capability specification see:
-[`openspec/specs/database-backups/spec.md`](../../openspec/specs/database-backups/spec.md)
-(populated after `/opsx:archive`).
+For the historical capability specification see:
+[`archive/openspec-legacy/specs/database-backups/spec.md`](../../archive/openspec-legacy/specs/database-backups/spec.md)
+(archived; non-authoritative — current authority is `docs/development-guide.md §12`).
 
 **Scope notes:**
 - **v3 (May 2026):** dual-recipient encryption, healthchecks.io off-VPS pinger, and the public pre-op webhook with Traefik IP allowlist were all cut under Gate C triage. Local-forensic adversary out of threat model.
-- **v1 (June 2026):** R2 lifecycle rules reduced from 5 to 1 (only `daily/` 30d); alerting cut from 3 channels (ntfy + Gmail SMTP + Kuma) to 2 (ntfy + Resend HTTP API); Uptime Kuma in-VPS dead-man-switch and the `MyFinanceBackup-Watchdog` workflow dropped. See `openspec/changes/supabase-backup-policy/proposal.md` "Threat model" section and `design.md` Decisions 3 + 7.
+- **v1 (June 2026):** R2 lifecycle rules reduced from 5 to 1 (only `daily/` 30d); alerting cut from 3 channels (ntfy + Gmail SMTP + Kuma) to 2 (ntfy + Resend HTTP API); Uptime Kuma in-VPS dead-man-switch and the `MyFinanceBackup-Watchdog` workflow dropped. See `archive/openspec-legacy/changes/supabase-backup-policy/proposal.md` "Threat model" section and `design.md` Decisions 3 + 7.
 
 ---
 
 ## 2.5.2 Architecture
 
-See [`openspec/changes/supabase-backup-policy/design.md §10`](../../openspec/changes/supabase-backup-policy/design.md)
+See [`archive/openspec-legacy/changes/supabase-backup-policy/design.md §10`](../../archive/openspec-legacy/changes/supabase-backup-policy/design.md)
 for the sidecar architecture diagram.
 
 Summary:

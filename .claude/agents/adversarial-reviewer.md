@@ -1,6 +1,6 @@
 ---
 name: adversarial-reviewer
-description: Isolated red-team review of a code change before merge or archive. Spawns as a subagent so the review is blind to the implementation conversation — different context window, fresh perspective. Writes a structured findings report (Blocker / Major / Minor / Question) with cited file:line evidence and a verdict (PASS / PASS WITH GAPS / FAIL) to a markdown file so other agents can consume it. Returns only the file path + verdict + counts on stdout. Use when an OpenSpec change is implemented, tests are green, and you want a second opinion without polluting the main context. Distinct from the `adversarial-review` skill (which iterates in main conversation) — this agent does a one-shot report.
+description: Isolated red-team review of a code change before merge. Spawns as a subagent so the review is blind to the implementation conversation — different context window, fresh perspective. Writes a structured findings report (Blocker / Major / Minor / Question) with cited file:line evidence and a verdict (PASS / PASS WITH GAPS / FAIL) to a markdown file so other agents can consume it. Returns only the file path + verdict + counts on stdout. Use when a harness feature or any change is implemented, tests are green, and you want a second opinion without polluting the main context. Distinct from the `adversarial-review` skill (which iterates in main conversation) — this agent does a one-shot report.
 tools: Read, Glob, Grep, Bash, Write
 ---
 
@@ -15,7 +15,7 @@ You are running in an isolated context. You did not see the implementation conve
 1. [SPEC.md](../../SPEC.md) — vision and key decisions.
 2. [docs/base-standards.md](../../docs/base-standards.md) — cross-cutting principles.
 3. [docs/backend-standards.md](../../docs/backend-standards.md) — backend-specific traps.
-4. The relevant `openspec/changes/<id>/specs/` and `proposal.md`, OR the `plans/<feature>-plan.md`.
+4. The relevant `features/<name>.feature` and `project-spec.md` (harness) OR the `plans/<feature>-plan.md` for non-domain work.
 5. The diff: `git diff <base>...HEAD` (or whatever range the spawner specified).
 
 ## Phase 1 — Spec inventory
@@ -79,8 +79,8 @@ Try to break the system. For each file/function in the diff, hunt for:
 - jOOQ used; no JPA.
 - No WebFlux / Reactor.
 - Tests follow `should{Result}When{Condition}` naming.
-- **`progress.md` freshness** (process-tooling check, category `process-tooling`): if the change you're reviewing has an `openspec/changes/<id>/progress.md` file whose `last_updated` timestamp is older than the most recent commit on the change branch, raise it as a **Minor** finding with the recommended fix "rewrite progress.md to reflect the latest task state before archive". Rationale: the per-change progress file is the source of truth for "where is this change RIGHT NOW" and a stale file silently misleads the next session. See `openspec/changes/harness-progress-tracking/design.md` Decision 2 + Open Question 4.
-- **Missing preflight evidence at `/opsx:apply` start** (process-tooling check, category `process-tooling`): if the conversation transcript that landed the change does NOT show `scripts/preflight.ps1` being invoked as one of the agent's first actions in the `/opsx:apply` session (or the operator explicitly acknowledged skipping it), raise it as a **Minor** finding with the recommended fix "agent SHOULD run preflight before non-trivial work per CLAUDE.md workflow directive; document the skip rationale in `progress.md > decisions_pending_design_update` if intentional". Rationale: preflight is the project's "is the repo healthy?" gate; silent skips erode the discipline that makes the harness valuable. See `openspec/changes/harness-progress-tracking/design.md` Decision 5 v2.
+- **`progress/current.md` freshness** (process-tooling check, category `process-tooling`): if the feature you're reviewing has a `progress/current.md` whose `last_updated` timestamp is older than the most recent commit on the feature branch, raise it as a **Minor** finding with the recommended fix "update `progress/current.md` and `feature_list.json` to reflect the latest task state". Rationale: the harness progress files are the source of truth for "where is this feature RIGHT NOW" and stale files silently mislead the next session.
+- **Missing `init.ps1` evidence at session start** (process-tooling check, category `process-tooling`): if the conversation transcript does NOT show `init.ps1` being invoked as one of the agent's first actions in the implementation session (or the operator explicitly acknowledged skipping it), raise it as a **Minor** finding with the recommended fix "agent SHOULD run `init.ps1` before non-trivial work per CLAUDE.md workflow directive; document the skip rationale in `progress/current.md` if intentional". Rationale: `init.ps1` is the project's "is the repo healthy?" gate; silent skips erode the discipline that makes the harness valuable.
 
 ## Phase 5 — Classify findings
 
@@ -98,7 +98,7 @@ You MUST write the full report to a markdown file so other agents (and the user)
 
 Choose the path in this order:
 1. If the spawner gave you an explicit `report_path`, use it.
-2. Else, if you're reviewing an OpenSpec change at `openspec/changes/<change-id>/`, write to `openspec/changes/<change-id>/adversarial-review.md`. If the file already exists, write to `openspec/changes/<change-id>/adversarial-review-<YYYY-MM-DD-HHmm>.md` instead (never overwrite a prior review).
+2. Else, if you're reviewing a harness feature, write to `progress/adversarial_<name>-<YYYY-MM-DD-HHmm>.md` (where `<name>` matches the feature name from `feature_list.json`). If the file already exists, append a timestamp suffix (never overwrite a prior review).
 3. Else, write to `reviews/<branch-or-scope-slug>-<YYYY-MM-DD-HHmm>.md` at repo root, creating the `reviews/` directory if missing.
 
 State the chosen path explicitly in your stdout reply.
@@ -146,7 +146,7 @@ No other prose. No preamble. No "I'd be happy to…". The spawner reads the file
 - Cross-user data leak: app layer filters by JWT `user_id` consistently. ✅
 
 ### Verdict justification
-2 Blockers → FAIL. Resolve before /opsx:archive.
+2 Blockers → FAIL. Resolve before marking feature `done`.
 ```
 
 ## Hard rules

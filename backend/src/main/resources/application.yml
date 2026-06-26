@@ -21,7 +21,7 @@ server:
   port: 8080
   forward-headers-strategy: framework
 
-# Auth / Supabase JWKS — see openspec/changes/backend-mvp-readonly/design.md D1.
+# Auth / Supabase JWKS — see archive/openspec-legacy/changes/archive/2026-06-08-backend-mvp-readonly/design.md D1.
 # At runtime SUPABASE_JWT_JWKS_URI / SUPABASE_JWT_ISSUER come from the environment.
 # In tests they are injected via @DynamicPropertySource by JwksWireMockExtension; blanks are
 # intentional so application-test.yml does not need to repeat them.

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "MyFinanceView MVP frontend — Vite + React 19 + TypeScript + Tailwind, talks to Supabase via supabase-js. See ../openspec/changes/mvp-frontend-readonly/ and AGENTS.md.",
+  "description": "MyFinanceView MVP frontend — Vite + React 19 + TypeScript + Tailwind, talks to Supabase via supabase-js. See ../archive/openspec-legacy/changes/archive/2026-06-01-mvp-frontend-readonly/ and AGENTS.md.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

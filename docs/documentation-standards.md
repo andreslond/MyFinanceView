@@ -13,8 +13,8 @@
 | **Design** | `docs/design/` | Visual language, screens, dev handoff | When the design system or UI handoff evolves |
 | **Plans** | `plans/*.md` | Per-feature technical plan | When an in-flight feature reaches a milestone |
 | **Backlog** | [Notion page](https://www.notion.so/35d8c9b709f081c08d62f7257ce3db57) | Épicas, tareas, DoD | Continuously |
-| **Per-change artifacts** | `openspec/changes/<id>/` | Proposal, design, specs, tasks | Per `/opsx:propose` invocation |
-| **Capability specs** | `openspec/specs/<capability>/` | Canonical capability requirements | After `/opsx:archive` merges deltas |
+| **Harness artifacts** | `project-spec.md`, `features/`, `progress/` | Gherkin contracts, per-feature TDD/review logs | Per harness pipeline run |
+| **Legacy capability specs** | `archive/openspec-legacy/specs/<capability>/` | Archived canonical requirements (historical) | Read-only; non-authoritative |
 | **Memory** | `~/.claude/projects/{slug}/memory/` | AI session-persistent facts | When decisions are made worth remembering |
 | **Archive** | `archive/*` | Historical docs (OBSOLETE banner) | Only to update the banner |
 
@@ -26,7 +26,7 @@ The Design surface has three sub-layers:
 ## 2. Priority When Sources Conflict
 
 ```
-SPEC.md > docs/*.md > plans/*.md > openspec/changes/ > Notion > archive/
+SPEC.md > docs/*.md > plans/*.md > AGENTS.md + docs/uncle-bob/ > Notion > archive/
 ```
 
 If you can't reconcile a conflict locally, flag it to the human and pick the higher-priority source.
@@ -44,7 +44,7 @@ If you can't reconcile a conflict locally, flag it to the human and pick the hig
 | What does the Email-Sync flow look like? | `docs/design/ui-handoff.md` |
 | What's the exact `tokens.css` from the designer? | `docs/design/raw/.../tokens.css` |
 | What's the DoD for TASK-SG-BE-04? | Notion (tarjeta) |
-| Step-by-step changes for "Add GET /savings-goals"? | `openspec/changes/add-get-savings-goals/` |
+| Step-by-step domain feature spec? | `features/<name>.feature` + `progress/` (harness artifacts) |
 | User's role preferences | Memory (`user_collaboration.md`) |
 
 ## 4. Writing Rules
@@ -69,7 +69,7 @@ This is also documentation. Rules:
 
 | Trigger | What to update |
 |---|---|
-| `/opsx:archive` runs | `/update-docs` skill walks SPEC.md, docs/, Notion |
+| Feature reaches `done` status | `/update-docs` skill walks SPEC.md, docs/, Notion |
 | Schema migration applied | `docs/data-model.md` |
 | New convention agreed in conversation | `docs/{relevant}.md` immediately, plus memory entry |
 | New module added | `docs/backend-standards.md §2` |

@@ -15,7 +15,7 @@ You are a senior Java backend engineer implementing changes in the MyFinanceView
 2. [docs/base-standards.md](../../docs/base-standards.md) — cross-cutting principles.
 3. [docs/backend-standards.md](../../docs/backend-standards.md) — Java/Spring/jOOQ specifics.
 4. [docs/data-model.md](../../docs/data-model.md) — schema state.
-5. The relevant `openspec/changes/<id>/` if you're implementing a proposed change, OR `plans/<feature>-plan.md`.
+5. `project-spec.md` and the relevant `features/<name>.feature` (harness) OR `plans/<feature>-plan.md` for non-domain work.
 
 Do not skip these reads. The project explicitly rejects patterns that generic Java guidance recommends — you'll do the wrong thing without context.
 
@@ -38,13 +38,13 @@ Do not skip these reads. The project explicitly rejects patterns that generic Ja
 
 For every change:
 
-1. **Read the spec first.** If you're implementing an OpenSpec change, the spec is in `openspec/changes/<id>/specs/`. Translate acceptance criteria into a checklist before writing code.
+1. **Read the spec first.** For domain work, the spec is in `features/<name>.feature` + `project-spec.md`. For non-domain work, read `plans/<feature>-plan.md` or the relevant `docs/*.md`. Translate acceptance criteria into a checklist before writing code.
 2. **TDD per task.** RED (failing test) → GREEN (minimal code) → REFACTOR. No code without a test that justifies it.
 3. **One module touched per change** unless the spec explicitly crosses modules.
 4. **Controllers are thin.** Deserialize → extract `user_id` from JWT → call service → return DTO. No business logic.
 5. **Services depend on repository interfaces** (in `db/repository/`), not on jOOQ types directly. The jOOQ implementations live in `db/jooq/`.
-6. **Update `openspec/changes/<id>/progress.md` after every closed task.** After closing every task in `tasks.md` (i.e. flipping `- [ ]` to `- [x]`), rewrite `openspec/changes/<id>/progress.md` per the schema in `openspec/templates/progress-template.md`. Update `last_completed` to the just-closed task ID, set `current_task` to the next pending task ID (or `none` if all closed), set `next_step` to one line describing that task's first action, refresh `last_updated` to the current ISO-8601 UTC timestamp, and append to `decisions_pending_design_update` or `blockers` if anything new surfaced during the task. **Do NOT update after every tool call** — per-task cadence only. See `openspec/changes/harness-progress-tracking/design.md` Decision 2 for the rationale (write overhead vs. information value).
-7. **Run `scripts/preflight.ps1` at the start of every implementation session.** Before touching code or files, invoke `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/preflight.ps1` and report the output. This is the project's "is the repo healthy?" gate (active-change count, mvn compile, working tree, branch + commit, per-change artefact presence, Supabase backup freshness). A non-zero exit MUST be reported and acknowledged; a `[FAIL] mvn compile failed` SHALL stop the session and ask the operator whether the broken build is intentional. There is no SessionStart hook — this directive IS the gate. See `openspec/changes/harness-progress-tracking/design.md` Decision 5 v2 for rationale.
+6. **Update `progress/current.md` and `feature_list.json` after every closed test cycle.** Rewrite `progress/current.md` per the harness schema, update `feature_list.json` status (`in_progress` → `done` when all tests green + judge APPROVED + PIT 100%), and append to `progress/history.md`. **Do NOT update after every tool call** — per-feature-phase cadence only.
+7. **Run `init.ps1` at the start of every implementation session.** Before touching code or files, invoke `powershell.exe -NoProfile -ExecutionPolicy Bypass -File init.ps1` and report the output. This is the project's "is the repo healthy?" gate (harness + environment verification, mvn compile, working tree). A non-zero exit MUST be reported and acknowledged; a `[FAIL] mvn compile failed` SHALL stop the session and ask the operator whether the broken build is intentional. There is no SessionStart hook — this directive IS the gate.
 
 ## Code patterns to use
 
@@ -151,7 +151,7 @@ class TransactionIntegrationTest {
 ## Common requests + correct responses
 
 **"Add a quick controller method to do X"**
-→ No. First, is there a spec? If not, ask for `/enrich-us` + `/opsx:propose`. Then TDD it.
+→ No. First, is there a spec? If not, run `/enrich-us` then start the harness pipeline (`spec_partner` conversation). Then TDD it.
 
 **"Just mock the DB for this test"**
 → No. Integration tests use Testcontainers. Unit tests don't touch the DB at all.

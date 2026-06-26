@@ -33,7 +33,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * Security wiring for the REST API — see openspec/changes/backend-mvp-readonly/design.md D1.
+ * Security wiring for the REST API — see archive/openspec-legacy/changes/archive/2026-06-08-backend-mvp-readonly/design.md D1.
  *
  * <p>Highlights:
  * <ul>

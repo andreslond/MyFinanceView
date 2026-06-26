@@ -1,6 +1,6 @@
 # frontend/AGENTS.md — operative rules for any agent touching this folder
 
-> If you are an AI agent editing files under `frontend/`, read this first. The rules below are hard guardrails. The architectural rationale lives in `../openspec/changes/mvp-frontend-readonly/design.md`.
+> If you are an AI agent editing files under `frontend/`, read this first. The rules below are hard guardrails. The architectural rationale lives in `../archive/openspec-legacy/changes/archive/2026-06-01-mvp-frontend-readonly/design.md`.
 
 ---
 
@@ -43,7 +43,7 @@ It does NOT:
 - Update `myfinance.merchants` (no `confidence` increment, no UPSERT). That's TASK-BE-06 of the backend Java.
 - Touch `transactions.category_confirmed`. That column does not exist in the current schema; introducing it is pending V008.
 
-**Why:** the original proposal (pre-Path 2) had a Postgres trigger that did the feedback loop. The adversarial review of 2026-06-01 (`../openspec/changes/mvp-frontend-readonly/adversarial-review-2026-05-31.md`) found 7 Blockers around that trigger (table/columns missing, RLS collisions, SECURITY INVOKER blocking n8n's `service_role`, split-brain with the future Java backend). The operator chose Path 2: ship without the trigger. The cost is no UI-driven learning until backend Java; the benefit is shipping tonight.
+**Why:** the original proposal (pre-Path 2) had a Postgres trigger that did the feedback loop. The adversarial review of 2026-06-01 (`../archive/openspec-legacy/changes/archive/2026-06-01-mvp-frontend-readonly/adversarial-review-2026-05-31.md`) found 7 Blockers around that trigger (table/columns missing, RLS collisions, SECURITY INVOKER blocking n8n's `service_role`, split-brain with the future Java backend). The operator chose Path 2: ship without the trigger. The cost is no UI-driven learning until backend Java; the benefit is shipping tonight.
 
 ---
 
@@ -172,8 +172,8 @@ The Vercel build command MUST chain `typecheck && lint && test && build` so CI i
 
 ## Related reading
 
-- `../openspec/changes/mvp-frontend-readonly/proposal.md` — Why this MVP, Threat model.
-- `../openspec/changes/mvp-frontend-readonly/design.md` — D1–D9 decisions, risks.
-- `../openspec/changes/mvp-frontend-readonly/specs/frontend-mvp/spec.md` — Scenarios.
-- `../openspec/changes/mvp-frontend-readonly/adversarial-review-2026-05-31.md` — What we corrected.
+- `../archive/openspec-legacy/changes/archive/2026-06-01-mvp-frontend-readonly/proposal.md` — Why this MVP, Threat model.
+- `../archive/openspec-legacy/changes/archive/2026-06-01-mvp-frontend-readonly/design.md` — D1–D9 decisions, risks.
+- `../archive/openspec-legacy/changes/archive/2026-06-01-mvp-frontend-readonly/specs/frontend-mvp/spec.md` — Scenarios.
+- `../archive/openspec-legacy/changes/archive/2026-06-01-mvp-frontend-readonly/adversarial-review-2026-05-31.md` — What we corrected.
 - `../docs/base-standards.md`, `../docs/frontend-standards.md`, `../docs/design/design-system.md`.
