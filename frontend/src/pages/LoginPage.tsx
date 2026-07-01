@@ -21,7 +21,7 @@ export default function LoginPage() {
   }
 
   if (session) {
-    return <Navigate to="/transactions" replace />;
+    return <Navigate to="/home" replace />;
   }
 
   return (

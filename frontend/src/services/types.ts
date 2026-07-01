@@ -38,7 +38,6 @@ export interface CategoryDTO {
   userId: string | null; // null = system category
   name: string; // technical name (English)
   displayName: string | null; // Spanish; falls back to `name` when null
-  parentId: string | null;
   createdAt: string;
   updatedAt: string;
 }

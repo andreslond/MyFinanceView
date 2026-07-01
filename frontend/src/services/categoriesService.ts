@@ -6,7 +6,6 @@ interface CategoryRow {
   user_id: string | null;
   name: string;
   display_name: string | null;
-  parent_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -17,7 +16,6 @@ function rowToDTO(row: CategoryRow): CategoryDTO {
     userId: row.user_id,
     name: row.name,
     displayName: row.display_name,
-    parentId: row.parent_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -31,7 +29,7 @@ export const categoriesService = {
     const { data, error } = await supabase
       .schema('myfinance')
       .from('categories')
-      .select('id, user_id, name, display_name, parent_id, created_at, updated_at');
+      .select('id, user_id, name, display_name, created_at, updated_at');
     if (error) throw error;
     const rows = ((data ?? []) as CategoryRow[]).map(rowToDTO);
     rows.sort((a, b) => {
