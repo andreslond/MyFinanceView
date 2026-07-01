@@ -40,7 +40,7 @@ describe('computeMonthlySummary', () => {
   it('treats uncategorized transactions as expense', () => {
     const s = computeMonthlySummary([tx('u', 400, null)], index, 'Junio 2026');
     expect(s.expense).toBe(400);
-    expect(s.segments[0].label).toBe('Sin categoría');
+    expect(s.segments[0]?.label).toBe('Sin categoría');
   });
 
   it('builds donut segments sorted desc with integer percentages', () => {
@@ -50,7 +50,7 @@ describe('computeMonthlySummary', () => {
       'Junio 2026'
     );
     expect(s.segments.map((x) => x.label)).toEqual(['food', 'shop']);
-    expect(s.segments[0].pct).toBe(75);
+    expect(s.segments[0]?.pct).toBe(75);
     expect(s.legend.length).toBeLessThanOrEqual(4);
   });
 
